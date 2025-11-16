@@ -744,8 +744,6 @@ public class mainAnim extends JComponent implements MouseListener, MouseMotionLi
                 //snmpGetScriptList sl = new snmpGetScriptList(links[linkSelected].getNodeSrc().getIp(), links[linkSelected].getNodeSrc().getCommunity());
                 //snmpSet.execute(links[linkSelected].getNodeSrc().getIp(), links[linkSelected].getNodeSrc().getCommunity(), sl.findIndex(links[linkSelected].getInterfaceName() + "-disable"), console);
                 dataManagement.storage.restartPollersforMap(map);
-                //System.out.println(links[linkSelected].getInterfaceName());
-                //System.out.println(sl.findIndex(links[linkSelected].getInterfaceName()));
             } else if (evt.getSource() == lineManage) {
                 console.setText("Line managing...");
                 OptionPaneMultiple opt = new OptionPaneMultiple(this);
