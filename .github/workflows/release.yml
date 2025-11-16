@@ -30,8 +30,8 @@ jobs:
         run: |
           mkdir release
           cp target/jnodesOne-jar-with-dependencies.jar release/
-          cp jnodesOne.exe release/
-          cp -r jre-minimal release/
+          cp target/jnodesOne.exe release/
+          cp -r target/jre-minimal release/
           cd release
           zip -r ../jnodesOne_${{ github.ref_name }}.zip .
           cd ..
