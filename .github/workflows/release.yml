@@ -35,7 +35,7 @@ jobs:
 
       - name: Create release ZIP (Windows, no target/ prefix)
         run: |
-          $zipName = "jnodesOne_${{ github.ref_name }}.zip"
+          $zipName = "jnodesOne_${{ github.ref_name }}_windows-x64.zip"
 
           Set-Location target
 
