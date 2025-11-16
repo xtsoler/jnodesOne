@@ -37,16 +37,22 @@ jobs:
         run: |
           $zipName = "jnodesOne_${{ github.ref_name }}_windows-x64.zip"
 
-          Set-Location target
+          # Start fresh
+          if (Test-Path "release") {
+            Remove-Item "release" -Recurse -Force
+          }
+          New-Item -ItemType Directory -Path "release" | Out-Null
 
-          $paths = @(
-            "jnodesOne-jar-with-dependencies.jar",
-            "jnodesOne.exe",
-            "release_files\run_with_console.bat",
-            "jre-minimal"
-          )
+          # Copy files from target/
+          Copy-Item "target\jnodesOne-jar-with-dependencies.jar" "release\" -Force
+          Copy-Item "target\jnodesOne.exe" "release\" -Force
+          Copy-Item "target\jre-minimal" "release\jre-minimal" -Recurse -Force
 
-          Compress-Archive -Path $paths -DestinationPath "../$zipName" -Force
+          # Copy extra files from repo root
+          Copy-Item "release_files\run_with_console.bat" "release\" -Force
+
+          # Create ZIP from inside the release folder *contents only*
+          Compress-Archive -Path "release\*" -DestinationPath $zipName -Force
         shell: pwsh
 
       - name: Create GitHub Release and upload asset
