@@ -26,15 +26,17 @@ jobs:
       - name: Build with Maven
         run: mvn -B package --file pom.xml
 
+      - name: List jre-minimal contents (debug)
+        run: |
+          echo "Contents of target/jre-minimal before zipping:"
+          ls -R target/jre-minimal || echo "target/jre-minimal not found"
+
       - name: Create release ZIP
         run: |
-          mkdir release
-          cp target/jnodesOne-jar-with-dependencies.jar release/
-          cp target/jnodesOne.exe release/
-          cp -r target/jre-minimal release/
-          cd release
-          zip -r ../jnodesOne_${{ github.ref_name }}.zip .
-          cd ..
+          zip -r jnodesOne_${{ github.ref_name }}.zip \
+            target/jnodesOne-jar-with-dependencies.jar \
+            target/jnodesOne.exe \
+            target/jre-minimal
 
       - name: Create GitHub Release and upload asset
         uses: softprops/action-gh-release@v2
