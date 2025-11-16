@@ -42,6 +42,7 @@ jobs:
           $paths = @(
             "jnodesOne-jar-with-dependencies.jar",
             "jnodesOne.exe",
+            "release_files\run_with_console.bat",
             "jre-minimal"
           )
 

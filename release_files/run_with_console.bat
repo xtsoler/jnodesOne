@@ -1,0 +1,1 @@
+.\jre-minimal\bin\javaw.exe -jar .\jnodesOne-jar-with-dependencies.jar
