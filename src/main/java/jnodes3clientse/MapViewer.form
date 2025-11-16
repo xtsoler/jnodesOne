@@ -18,7 +18,7 @@
       <Group type="103" groupAlignment="0" attributes="0">
           <Group type="102" alignment="1" attributes="0">
               <EmptySpace min="-2" pref="6" max="-2" attributes="0"/>
-              <Component id="statusLabel" pref="375" max="32767" attributes="0"/>
+              <Component id="statusLabel" pref="398" max="32767" attributes="0"/>
               <EmptySpace max="-2" attributes="0"/>
               <Component id="lockMap" min="-2" max="-2" attributes="0"/>
               <EmptySpace type="unrelated" max="-2" attributes="0"/>
@@ -60,7 +60,7 @@
         <Property name="foreground" type="java.awt.Color" editor="org.netbeans.beaninfo.editors.ColorEditor">
           <Color blue="ff" green="ff" red="ff" type="rgb"/>
         </Property>
-        <Property name="text" type="java.lang.String" value="AdminLogin"/>
+        <Property name="text" type="java.lang.String" value="Settings"/>
         <Property name="enabled" type="boolean" value="false"/>
       </Properties>
       <Events>

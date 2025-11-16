@@ -27,3 +27,4 @@ replay_pid*
 map*.json
 tmp.mpd
 encryption.key
+/target/

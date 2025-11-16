@@ -15,7 +15,7 @@ It lets you place nodes (routers, switches, servers, Wi-Fi APs, etc.), connect t
 - Background link/node polling (SNMP4J)
 - Optional encrypted SNMPv3 credentials
 - JSON-based map saving/loading
-- Icons for various network device types
+- Icons for various network device types, you can add your own
 - Native Java Swing GUI
 
 ## Project Structure

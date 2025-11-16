@@ -8,7 +8,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * @author  Christos
+ * @author Christos
  */
 public class Node extends JComponent implements Serializable {
 
@@ -16,7 +16,7 @@ public class Node extends JComponent implements Serializable {
     @Getter
     @Setter
     private String salt;
-    
+
     private Integer x, y, z, width, height, strwidth;
     private NodeInterface[] iflist = null;
     @Getter
@@ -24,11 +24,11 @@ public class Node extends JComponent implements Serializable {
     private boolean alive = false, newLink = false, highlighted = false;
     Font NodefontBold = new Font("LucidaSansDemiBold", Font.BOLD, 12);
     //Font Nodefont = new Font("LucidaSansDemiBold", Font.PLAIN, 12);
-    Font current=NodefontBold;
+    Font current = NodefontBold;
     private ImageIcon icon = null;
-    
+
     public static Color defaultNodeColor = Color.gray;
-    
+
     @Getter
     @Setter
     private Color nodeColor = defaultNodeColor;
@@ -149,7 +149,7 @@ public class Node extends JComponent implements Serializable {
 
     public void setImagefilename(String imagefilename) {
         icon = null;
-        if (imagefilename!=null && !imagefilename.isEmpty()) {
+        if (imagefilename != null && !imagefilename.isEmpty()) {
             icon = new ImageIcon("icons/" + imagefilename);
         }
         this.imagefilename = imagefilename;
@@ -201,17 +201,17 @@ public class Node extends JComponent implements Serializable {
         }
         return reply;
     }
-    
+
     public void withinRectangle(int whatx1, int whaty1, int whatx2, int whaty2) {
         int rectX = Math.min(whatx1, whatx2);
         int rectY = Math.min(whaty1, whaty2);
         int rectWidth = Math.abs(whatx1 - whatx2);
         int rectHeight = Math.abs(whaty1 - whaty2);
-        
-        highlighted = this.x < rectX + rectWidth &&
-                this.x + this.width > rectX &&
-                this.y < rectY + rectHeight &&
-                this.y + this.height > rectY;
+
+        highlighted = this.x < rectX + rectWidth
+                && this.x + this.width > rectX
+                && this.y < rectY + rectHeight
+                && this.y + this.height > rectY;
     }
 
     public void drawNode(Graphics g) {
@@ -221,8 +221,10 @@ public class Node extends JComponent implements Serializable {
         if (icon != null) {
             g.drawImage(icon.getImage(), x, y, null);
             g.setColor(Color.red);
+            Color bgColor = new Color(255, 255, 255, 70);
             if (alive) {
                 g.setColor(Color.green);
+                bgColor = new Color(0, 0, 0, 70);
             }
             if (ip.isEmpty()) {
                 g.setColor(nodeColor);
@@ -234,7 +236,16 @@ public class Node extends JComponent implements Serializable {
                 updateSize();
                 //int text2Width = metrics.stringWidth(name);
             }
-            g.drawString(nodeName, x + width / 2 - strwidth / 2, y + height + 10);
+            
+            drawTextWithBackground(
+                    g,
+                    nodeName,
+                    x + width / 2 - strwidth / 2,
+                    y + height + 10,
+                    g.getColor(),
+                    bgColor
+            );
+
         } else {
             g.setColor(Color.red);
             if (alive) {
@@ -257,16 +268,47 @@ public class Node extends JComponent implements Serializable {
             g.drawString(nodeName, x + 9, y + 16);
         }
     }
+
     @Override
-    public String toString(){
+    public String toString() {
         return nodeName;
     }
-    
-    public Node createClone(){
+
+    public Node createClone() {
         Node output = new Node(imagefilename, nodeID, nodeName, ip, x, y, z, community, alive);
         output.setSnmpv3auth(snmpv3auth);
         output.setSnmpv3priv(snmpv3priv);
         output.setSnmpv3username(snmpv3username);
         return output;
     }
+
+    private void drawTextWithBackground(Graphics g, String text, int x, int y, Color textColor, Color bgColor) {
+        Graphics2D g2 = (Graphics2D) g;
+
+        FontMetrics fm = g2.getFontMetrics();
+        int textWidth = fm.stringWidth(text);
+        int textHeight = fm.getHeight();
+        int ascent = fm.getAscent();
+
+        // Padding around the text
+        int paddingX = 4;
+        int paddingY = 2;
+
+        int bgX = x - paddingX;
+        int bgY = y - ascent;
+        int bgWidth = textWidth + paddingX * 2;
+        int bgHeight = textHeight + paddingY;
+
+        // Draw semi-transparent background
+        g2.setColor(bgColor);
+        g2.fillRoundRect(bgX, bgY, bgWidth, bgHeight, 6, 6);
+
+        // Draw border (optional)
+        //g2.setColor(new Color(0, 0, 0, 160));
+        //g2.drawRoundRect(bgX, bgY, bgWidth, bgHeight, 6, 6);
+        // Draw the actual text on the foreground
+        g2.setColor(textColor);
+        g2.drawString(text, x, y);
+    }
+
 }
