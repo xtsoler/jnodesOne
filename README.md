@@ -18,7 +18,7 @@ It lets you place nodes (routers, switches, servers, Wi-Fi APs, etc.), connect t
 - Optional encrypted SNMPv3 credentials
 - JSON-based map saving/loading
 - Icons for various network device types, you can add your own
-- Native Java Swing GUI
+- Native Java Swing GUI - works on any OS that has OpenJDK17 support
 
 ## Project Structure
 
