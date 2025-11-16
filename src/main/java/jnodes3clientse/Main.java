@@ -14,7 +14,9 @@ package jnodes3clientse;
 import java.awt.Container;
 import java.awt.Toolkit;
 import java.io.IOException;
+import javax.swing.JDialog;
 import javax.swing.JFrame;
+import javax.swing.JOptionPane;
 import message.*;
 import org.apache.commons.cli.*;
 import org.apache.commons.cli.help.HelpFormatter;
@@ -151,8 +153,36 @@ public class Main extends javax.swing.JFrame {
             }
 
             if (encryption_password == null || encryption_password.isEmpty()) {
-                System.out.println("**WARNING** No encryption key provided, passwords in map file will be stored unencrypted!");
-                tools.ModalMsg.display("<html> **WARNING** No encryption key provided, <br>passwords in map file will be stored unencrypted! </html>");
+                //System.out.println("**WARNING** No encryption key provided, passwords in map file will be stored unencrypted!");
+                //tools.ModalMsg.display("<html> **WARNING** No encryption key provided, <br>passwords in map file will be stored unencrypted! </html>");
+                EncryptionPrompt ep = new EncryptionPrompt();
+                Object[] options1 = {"Ok", "Cancel"};
+                JOptionPane op = new JOptionPane(
+                        ep,
+                        JOptionPane.PLAIN_MESSAGE,
+                        JOptionPane.OK_CANCEL_OPTION,
+                        null,
+                        options1);
+
+                JDialog dialog = op.createDialog(null, "Encryption");
+                dialog.setVisible(true);
+                Object selectedValue = op.getValue();
+
+                if (selectedValue != null && selectedValue.equals("Ok") && ep.getSelection() != null && !ep.getSelection().isEmpty()) {
+                    encryption_password = ep.getSelection();
+                    if (ep.createFile.isSelected()) {
+                        //create the file
+                        try {
+                            java.nio.file.Path keyFile = java.nio.file.Paths.get("encryption.key");
+                            java.nio.file.Files.writeString(keyFile, encryption_password + System.lineSeparator());
+                            System.out.println("encryption.key file created.");
+                        } catch (Exception ex) {
+                            System.err.println("Failed to create encryption.key file: " + ex.getMessage());
+                        }
+                    }
+                } else {
+                    tools.ModalMsg.display("<html> **WARNING** No encryption key provided, <br>passwords in map file will be stored unencrypted! </html>");
+                }
             }
 
             new Main().setVisible(true);

@@ -114,6 +114,8 @@ public class MapDataJsonConverter {
             plainText = tools.AESUtil.decrypt(algorithm, input, key, new IvParameterSpec(iv));
         } catch (NoSuchPaddingException | NoSuchAlgorithmException | InvalidAlgorithmParameterException | InvalidKeyException | BadPaddingException | IllegalBlockSizeException ex) {
             java.util.logging.Logger.getLogger(MapDataJsonConverter.class.getName()).log(Level.SEVERE, null, ex);
+            tools.ModalMsg.display("<html> **ERROR** Decryption failed, probably the provided decryption key is wrong </html>");
+            System.exit(1);
         }
         //System.out.println(plainText);
         return plainText;
@@ -138,6 +140,10 @@ public class MapDataJsonConverter {
             node.setSnmpv3auth(jsonNode.optString("snmpv3auth", null));
             node.setSnmpv3priv(jsonNode.optString("snmpv3priv", null));
         } else {
+            if (jnodes3clientse.Main.encryption_password == null || jnodes3clientse.Main.encryption_password.isEmpty()) {
+                tools.ModalMsg.display("<html> **ERROR** No encryption key provided, <br>but map contains encrypted values! <br>Cannot continue, please type provide the key or delete your map.json. </html>");
+                System.exit(1);
+            }
             // decrypt before loading
             String snmpv3auth = jsonNode.optString("snmpv3auth", null);
             if (snmpv3auth != null) {
