@@ -1,5 +1,7 @@
 # jnodesOne
 
+![Demo](assets/demo.gif)
+
 ![Java](https://img.shields.io/badge/Java-17-informational)
 ![Maven](https://img.shields.io/badge/Build-Maven-blue)
 ![GUI](https://img.shields.io/badge/Type-Desktop%20(Swing)-brightgreen)
