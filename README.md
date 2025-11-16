@@ -11,7 +11,7 @@ It lets you place nodes (routers, switches, servers, Wi-Fi APs, etc.), connect t
 ## Features
 
 - Interactive network map with draggable nodes and link visualization
-- SNMP-aware nodes and links (SNMPv2c & SNMPv3)
+- SNMP-aware nodes and links (SNMPv3)
 - Background link/node polling (SNMP4J)
 - Optional encrypted SNMPv3 credentials
 - JSON-based map saving/loading
