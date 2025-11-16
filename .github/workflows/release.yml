@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build-and-release:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     steps:
       - name: Check out code
@@ -25,18 +25,28 @@ jobs:
 
       - name: Build with Maven
         run: mvn -B package --file pom.xml
+        shell: pwsh
 
       - name: List jre-minimal contents (debug)
         run: |
-          echo "Contents of target/jre-minimal before zipping:"
-          ls -R target/jre-minimal || echo "target/jre-minimal not found"
+          Write-Host "Contents of target/jre-minimal:"
+          Get-ChildItem -Recurse target/jre-minimal
+        shell: pwsh
 
-      - name: Create release ZIP
+      - name: Create release ZIP (Windows, no target/ prefix)
         run: |
-          zip -r jnodesOne_${{ github.ref_name }}.zip \
-            target/jnodesOne-jar-with-dependencies.jar \
-            target/jnodesOne.exe \
-            target/jre-minimal
+          $zipName = "jnodesOne_${{ github.ref_name }}.zip"
+
+          Set-Location target
+
+          $paths = @(
+            "jnodesOne-jar-with-dependencies.jar",
+            "jnodesOne.exe",
+            "jre-minimal"
+          )
+
+          Compress-Archive -Path $paths -DestinationPath "../$zipName" -Force
+        shell: pwsh
 
       - name: Create GitHub Release and upload asset
         uses: softprops/action-gh-release@v2
