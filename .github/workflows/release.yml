@@ -53,6 +53,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            jnodesOne_${{ github.ref_name }}.zip
+            jnodesOne_${{ github.ref_name }}_windows-x64.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
