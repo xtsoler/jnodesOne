@@ -155,8 +155,8 @@ jobs:
 
           # Copy extra files from repo root
           # Include BOTH .command and .sh if they exist
-          if [ -f release_files/run_with_console_macos.command ]; then
-            cp release_files/run_with_console_macos.command release/
+          if [ -f release_files/run_with_console.command ]; then
+            cp release_files/run_with_console.command release/
           fi
 
           if [ -f release_files/run_with_console.sh ]; then
