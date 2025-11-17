@@ -1,0 +1,1 @@
+./jre-minimal/bin/java -jar ./jnodesOne-jar-with-dependencies.jar

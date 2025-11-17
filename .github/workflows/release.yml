@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  build-and-release:
+  build-and-release-windows:
     runs-on: windows-latest
 
     steps:
@@ -56,10 +56,64 @@ jobs:
           Compress-Archive -Path "release\*" -DestinationPath $zipName -Force
         shell: pwsh
 
-      - name: Create GitHub Release and upload asset
+      - name: Create / update GitHub Release with Windows asset
         uses: softprops/action-gh-release@v2
         with:
           files: |
             jnodesOne_${{ github.ref_name }}_windows-x64.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-and-release-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build with Maven
+        run: mvn -B package --file pom.xml
+
+      - name: List jre-minimal contents (debug)
+        run: |
+          echo "Contents of target/jre-minimal:"
+          ls -R target/jre-minimal
+
+      - name: Create release tarball (Linux, no target/ prefix)
+        run: |
+          set -e
+          tarName="jnodesOne_${{ github.ref_name }}_linux-x64.tar.gz"
+
+          rm -rf release
+          mkdir -p release
+
+          # Copy files from target/
+          cp target/jnodesOne-jar-with-dependencies.jar release/
+          # If you have a native launcher for Linux, copy it here as well:
+          # cp target/jnodesOne-linux release/
+          cp -r target/jre-minimal release/jre-minimal
+
+          # Copy extra files from repo root
+          # Adjust the script name if you use something else
+          if [ -f release_files/run_with_console.sh ]; then
+            cp release_files/run_with_console.sh release/
+          fi
+
+          cp -r icons release/icons
+
+          # Create tar.gz from the *contents* of release/
+          tar -czf "$tarName" -C release .
+      - name: Create / update GitHub Release with Linux asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            jnodesOne_${{ github.ref_name }}_linux-x64.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
