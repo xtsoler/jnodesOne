@@ -154,10 +154,12 @@ jobs:
           cp -r target/jre-minimal release/jre-minimal
 
           # Copy extra files from repo root
-          # e.g. a .command or .sh launcher for macOS
+          # Include BOTH .command and .sh if they exist
           if [ -f release_files/run_with_console_macos.command ]; then
             cp release_files/run_with_console_macos.command release/
-          elif [ -f release_files/run_with_console.sh ]; then
+          fi
+
+          if [ -f release_files/run_with_console.sh ]; then
             cp release_files/run_with_console.sh release/
           fi
 
