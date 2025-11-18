@@ -8,7 +8,7 @@
 
 `jnodesOne` is a Java/Swing application for drawing, visualizing, and lightly monitoring network topologies using SNMP.
 
-It lets you place nodes (routers, switches, servers, Wi-Fi APs, etc.), connect them with links, and then poll devices via SNMPv2/SNMPv3 to keep track of link and node state.
+It lets you place nodes (routers, switches, servers, Wi-Fi APs, etc.), connect them with links, and then poll devices via SNMPv3 to keep track of link and node state.
 
 ## Features
 
