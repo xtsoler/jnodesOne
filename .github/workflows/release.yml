@@ -163,6 +163,10 @@ jobs:
             cp release_files/run_with_console.sh release/
           fi
 
+          if [ -f release_files/README-macosx.txt ]; then
+            cp release_files/README-macosx.txt release/
+          fi
+
           cp -r icons release/icons
 
           # Create tar.gz from the *contents* of release/
