@@ -67,7 +67,7 @@ target\jnodesOne.exe
 
 ## SNMP Notes
 
-- Supports SNMPv2c community or SNMPv3 (auth+priv).
+- Supports SNMPv3 (auth+priv).
 - SNMP logic in `tools.Snmp`
 - Pollers: `linkMaintainer`, `nodeMaintainer`
 - Encrypted SNMPv3 fields supported.
