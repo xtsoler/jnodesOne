@@ -95,6 +95,11 @@ public class NodeEditor extends javax.swing.JPanel {
             snmpPrivFieldObf.setVisible(true);
             snmpPrivCheckBox.setVisible(true);
         }
+        if (node.getSnmpv3encr() != null && !node.getSnmpv3encr().isEmpty()) {
+            if(node.getSnmpv3encr().equals("DES")){
+                snmpEncr.setSelectedIndex(1);
+            }
+        }
         if (node.getSnmpv3auth() != null && !node.getSnmpv3auth().isEmpty()) {
             //snmpAuthField.setText(node.getSnmpv3auth());
             snmpAuthFieldObf.setText(node.getSnmpv3auth());
@@ -166,13 +171,15 @@ public class NodeEditor extends javax.swing.JPanel {
     public Node getSelection() {
         Node output = null;
         if (jRadioButton1.isSelected()) {
-            output = new Node(iconCheckBox.isSelected() ? iconsList.getSelectedValue() : null, null, nameField.getText(), ipField.getText() != null ? ipField.getText() : null, null, null, null, snmpCommunityField.getText() != null ? snmpCommunityField.getText() : null, false);
+            output = new Node(iconCheckBox.isSelected() ? iconsList.getSelectedValue().toString() : null, null, nameField.getText(), ipField.getText() != null ? ipField.getText() : null, null, null, null, snmpCommunityField.getText() != null ? snmpCommunityField.getText() : null, false);
             output.setSnmpv3username(null);
             output.setSnmpv3auth(null);
             output.setSnmpv3priv(null);
+            output.setSnmpv3encr(null);
         } else {
             output = new Node(iconCheckBox.isSelected() ? (String) iconsList.getSelectedValue() : null, null, nameField.getText(), ipField.getText() != null ? ipField.getText() : null, null, null, null, null, false);
             output.setSnmpv3username(snmpUsernameField.getText() != null ? snmpUsernameField.getText() : null);
+            output.setSnmpv3encr(snmpEncr.getSelectedItem().toString());
             //output.setSnmpv3auth(snmpAuthField.getText() != null ? snmpAuthField.getText() : null);
             //output.setSnmpv3priv(snmpPrivField.getText() != null ? snmpPrivField.getText() : null);
             if (snmpAuthFieldObf.getPassword() != null && snmpAuthFieldObf.getPassword().length > 0) {
@@ -202,8 +209,6 @@ public class NodeEditor extends javax.swing.JPanel {
         nameField = new javax.swing.JTextField();
         snmpCommunityField = new javax.swing.JTextField();
         jLabel1 = new javax.swing.JLabel();
-        jScrollPane1 = new javax.swing.JScrollPane();
-        iconsList = new javax.swing.JList<>();
         snmpCommunityCheckBox = new javax.swing.JCheckBox();
         jRadioButton1 = new javax.swing.JRadioButton();
         jRadioButton2 = new javax.swing.JRadioButton();
@@ -215,6 +220,9 @@ public class NodeEditor extends javax.swing.JPanel {
         snmpPrivFieldObf = new javax.swing.JPasswordField();
         jLabel2 = new javax.swing.JLabel();
         jButton1 = new javax.swing.JButton();
+        snmpEncr = new javax.swing.JComboBox<>();
+        jScrollPane1 = new javax.swing.JScrollPane();
+        iconsList = new javax.swing.JList<>();
 
         iconCheckBox.setText("Icon");
         iconCheckBox.addChangeListener(new javax.swing.event.ChangeListener() {
@@ -224,6 +232,11 @@ public class NodeEditor extends javax.swing.JPanel {
         });
 
         ipField.setEnabled(false);
+        ipField.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                ipFieldActionPerformed(evt);
+            }
+        });
 
         ipCheckBox.setText("Ip address");
         ipCheckBox.addChangeListener(new javax.swing.event.ChangeListener() {
@@ -236,23 +249,6 @@ public class NodeEditor extends javax.swing.JPanel {
         snmpCommunityField.setVisible(false);
 
         jLabel1.setText("Name:");
-
-        iconsList.setModel(new javax.swing.AbstractListModel<String>() {
-            String[] strings = {"Item 1", "Item 2", "Item 3", "Item 4", "Item 5"};
-
-            @Override
-            public int getSize() {
-                return strings.length;
-            }
-
-            @Override
-            public String getElementAt(int i) {
-                return strings[i];
-            }
-        });
-        iconsList.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION);
-        iconsList.setEnabled(false);
-        jScrollPane1.setViewportView(iconsList);
 
         snmpCommunityCheckBox.setText("community");
         snmpCommunityCheckBox.setVisible(false);
@@ -317,86 +313,99 @@ public class NodeEditor extends javax.swing.JPanel {
             }
         });
 
+        snmpEncr.setModel(new javax.swing.DefaultComboBoxModel<>(new String[] { "AES128", "DES" }));
+
+        iconsList.setModel(new javax.swing.AbstractListModel<String>() {
+            String[] strings = { "Item 1", "Item 2", "Item 3", "Item 4", "Item 5" };
+            public int getSize() { return strings.length; }
+            public String getElementAt(int i) { return strings[i]; }
+        });
+        jScrollPane1.setViewportView(iconsList);
+
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(this);
         this.setLayout(layout);
         layout.setHorizontalGroup(
-                layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                        .addGroup(layout.createSequentialGroup()
-                                .addContainerGap()
-                                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                                        .addGroup(layout.createSequentialGroup()
-                                                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                                                        .addComponent(ipCheckBox)
-                                                        .addComponent(jLabel1))
-                                                .addGap(63, 63, 63)
-                                                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                                                        .addComponent(nameField, javax.swing.GroupLayout.DEFAULT_SIZE, 255, Short.MAX_VALUE)
-                                                        .addComponent(ipField, javax.swing.GroupLayout.DEFAULT_SIZE, 255, Short.MAX_VALUE)))
-                                        .addComponent(jScrollPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 380, Short.MAX_VALUE)
-                                        .addGroup(layout.createSequentialGroup()
-                                                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                                                        .addGroup(layout.createSequentialGroup()
-                                                                .addComponent(jRadioButton1)
-                                                                .addGap(18, 18, 18)
-                                                                .addComponent(jRadioButton2))
-                                                        .addComponent(iconCheckBox))
-                                                .addGap(0, 0, Short.MAX_VALUE))
-                                        .addGroup(layout.createSequentialGroup()
-                                                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                                                        .addComponent(snmpCommunityCheckBox)
-                                                        .addComponent(snmpUsernameCheckBox)
-                                                        .addComponent(snmpAuthCheckBox)
-                                                        .addComponent(snmpPrivCheckBox)
-                                                        .addComponent(jLabel2))
-                                                .addGap(18, 18, 18)
-                                                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                                                        .addComponent(jButton1, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                                                        .addComponent(snmpCommunityField, javax.swing.GroupLayout.DEFAULT_SIZE, 291, Short.MAX_VALUE)
-                                                        .addComponent(snmpUsernameField, javax.swing.GroupLayout.Alignment.TRAILING)
-                                                        .addComponent(snmpAuthFieldObf)
-                                                        .addComponent(snmpPrivFieldObf))))
-                                .addContainerGap())
+            layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(layout.createSequentialGroup()
+                .addContainerGap()
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addComponent(jScrollPane1)
+                    .addGroup(layout.createSequentialGroup()
+                        .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addComponent(ipCheckBox)
+                            .addComponent(jLabel1))
+                        .addGap(63, 63, 63)
+                        .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addComponent(nameField, javax.swing.GroupLayout.DEFAULT_SIZE, 255, Short.MAX_VALUE)
+                            .addComponent(ipField, javax.swing.GroupLayout.DEFAULT_SIZE, 255, Short.MAX_VALUE)))
+                    .addGroup(layout.createSequentialGroup()
+                        .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addComponent(snmpCommunityCheckBox)
+                            .addComponent(snmpUsernameCheckBox)
+                            .addComponent(snmpAuthCheckBox)
+                            .addComponent(snmpPrivCheckBox)
+                            .addComponent(jLabel2))
+                        .addGap(18, 18, 18)
+                        .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addComponent(jButton1, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                            .addComponent(snmpCommunityField, javax.swing.GroupLayout.DEFAULT_SIZE, 291, Short.MAX_VALUE)
+                            .addComponent(snmpUsernameField, javax.swing.GroupLayout.Alignment.TRAILING)
+                            .addComponent(snmpAuthFieldObf)
+                            .addGroup(layout.createSequentialGroup()
+                                .addComponent(snmpPrivFieldObf)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                .addComponent(snmpEncr, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))))
+                    .addGroup(layout.createSequentialGroup()
+                        .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addGroup(layout.createSequentialGroup()
+                                .addComponent(jRadioButton1)
+                                .addGap(18, 18, 18)
+                                .addComponent(jRadioButton2))
+                            .addComponent(iconCheckBox))
+                        .addGap(0, 0, Short.MAX_VALUE)))
+                .addContainerGap())
         );
         layout.setVerticalGroup(
-                layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                        .addGroup(layout.createSequentialGroup()
-                                .addContainerGap()
-                                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                                        .addComponent(jLabel1)
-                                        .addComponent(nameField, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                                .addGap(8, 8, 8)
-                                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
-                                        .addComponent(ipCheckBox)
-                                        .addComponent(ipField, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                                        .addComponent(jRadioButton1)
-                                        .addComponent(jRadioButton2))
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                                        .addComponent(snmpCommunityCheckBox)
-                                        .addComponent(snmpCommunityField, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                                        .addComponent(snmpUsernameCheckBox)
-                                        .addComponent(snmpUsernameField, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                                        .addComponent(snmpAuthCheckBox)
-                                        .addComponent(snmpAuthFieldObf, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                                        .addComponent(snmpPrivCheckBox)
-                                        .addComponent(snmpPrivFieldObf, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                                        .addComponent(jButton1)
-                                        .addComponent(jLabel2))
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addComponent(iconCheckBox)
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addComponent(jScrollPane1, javax.swing.GroupLayout.PREFERRED_SIZE, 109, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                .addContainerGap(27, Short.MAX_VALUE))
+            layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(layout.createSequentialGroup()
+                .addContainerGap()
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(jLabel1)
+                    .addComponent(nameField, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addGap(8, 8, 8)
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
+                    .addComponent(ipCheckBox)
+                    .addComponent(ipField, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(jRadioButton1)
+                    .addComponent(jRadioButton2))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(snmpCommunityCheckBox)
+                    .addComponent(snmpCommunityField, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(snmpUsernameCheckBox)
+                    .addComponent(snmpUsernameField, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(snmpAuthCheckBox)
+                    .addComponent(snmpAuthFieldObf, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(snmpPrivCheckBox)
+                    .addComponent(snmpPrivFieldObf, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(snmpEncr, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(jButton1)
+                    .addComponent(jLabel2))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addComponent(iconCheckBox)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addComponent(jScrollPane1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
         );
     }// </editor-fold>//GEN-END:initComponents
 
@@ -480,6 +489,10 @@ public class NodeEditor extends javax.swing.JPanel {
         jButton1.setBackground(selectedColor);
     }//GEN-LAST:event_jButton1ActionPerformed
 
+    private void ipFieldActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_ipFieldActionPerformed
+        // TODO add your handling code here:
+    }//GEN-LAST:event_ipFieldActionPerformed
+
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.ButtonGroup buttonGroup1;
     private javax.swing.JCheckBox iconCheckBox;
@@ -497,6 +510,7 @@ public class NodeEditor extends javax.swing.JPanel {
     private javax.swing.JPasswordField snmpAuthFieldObf;
     private javax.swing.JCheckBox snmpCommunityCheckBox;
     private javax.swing.JTextField snmpCommunityField;
+    private javax.swing.JComboBox<String> snmpEncr;
     private javax.swing.JCheckBox snmpPrivCheckBox;
     private javax.swing.JPasswordField snmpPrivFieldObf;
     private javax.swing.JCheckBox snmpUsernameCheckBox;

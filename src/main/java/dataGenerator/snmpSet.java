@@ -12,6 +12,7 @@ import org.snmp4j.mp.MPv3;
 import org.snmp4j.mp.SnmpConstants;
 import org.snmp4j.security.AuthSHA;
 import org.snmp4j.security.PrivAES128;
+import org.snmp4j.security.PrivDES;
 import org.snmp4j.security.SecurityLevel;
 import org.snmp4j.security.SecurityModels;
 import org.snmp4j.security.SecurityProtocols;
@@ -56,6 +57,7 @@ public class snmpSet {
                                String user,
                                String authPass,
                                String privPass,
+                               String encr,
                                String scriptIndex,
                                JLabel console) {
         // Quiet no-op when creds are missing (your request)
@@ -84,6 +86,13 @@ public class snmpSet {
                     AuthSHA.ID,    new OctetString(authPass),
                     PrivAES128.ID, new OctetString(privPass)
             );
+            if(encr!=null && encr.equals("DES")){
+                usmUser = new UsmUser(
+                    new OctetString(user),
+                    AuthSHA.ID,    new OctetString(authPass),
+                    PrivDES.ID, new OctetString(privPass)
+            );
+            }
             snmp.getUSM().addUser(usmUser);
 
             // Target

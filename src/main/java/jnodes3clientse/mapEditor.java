@@ -45,7 +45,7 @@ public class mapEditor {
             newnodes = new Node[1];
             //Node nn = new Node(newnode.getSelection()[3], temp, newnode.getSelection()[0], newnode.getSelection()[1], x, y, 0, newnode.getSelection()[2], false);
             Node nn = newnode.getSelectionNode();
-            System.out.println("2-------------------------------------------" + nn.getNodeColor().getRGB());
+            //System.out.println("2-------------------------------------------" + nn.getNodeColor().getRGB());
             nn.setID(temp);
             nn.setX(x);
             nn.setY(y);
@@ -70,6 +70,7 @@ public class mapEditor {
         newnodes[index].setSnmpv3auth(newnode.getSelectionNode().getSnmpv3auth());
         newnodes[index].setSnmpv3priv(newnode.getSelectionNode().getSnmpv3priv());
         newnodes[index].setSnmpv3username(newnode.getSelectionNode().getSnmpv3username());
+        newnodes[index].setSnmpv3encr(newnode.getSelectionNode().getSnmpv3encr());
         newnodes[index].setNodeColor(newnode.getSelectionNode().getNodeColor());
         newnodes[index].setX(x);
         newnodes[index].setY(y);

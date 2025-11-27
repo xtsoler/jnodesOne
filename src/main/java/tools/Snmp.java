@@ -27,21 +27,22 @@ import org.snmp4j.smi.Variable;
 import org.snmp4j.smi.VariableBinding;
 import org.snmp4j.transport.DefaultUdpTransportMapping;
 import org.snmp4j.TransportMapping;
+import org.snmp4j.security.PrivDES;
 
 public class Snmp {
 
-    private final static boolean show_info    = false;
+    private final static boolean show_info = false;
     private final static boolean debug_timing = false; // leave off; timing is in linkMaintainer
 
     /**
      * Polls a single link and updates its counters/admin/oper state.
      *
      * Tries 64-bit HC counters first (IF-MIB::ifHCInOctets/ifHCOutOctets).
-     * Falls back to classic 32-bit counters (MIB-II::ifInOctets/ifOutOctets)
-     * if HC counters are not supported or return noSuchInstance.
+     * Falls back to classic 32-bit counters (MIB-II::ifInOctets/ifOutOctets) if
+     * HC counters are not supported or return noSuchInstance.
      *
-     * @return true  if we got a valid PDU with counters (and no SNMP errorStatus)
-     *         false on timeout, SNMP errorStatus, or incomplete VBs
+     * @return true if we got a valid PDU with counters (and no SNMP
+     * errorStatus) false on timeout, SNMP errorStatus, or incomplete VBs
      */
     public static boolean snmpLinkRateUpdate(Link lnk) {
 
@@ -59,12 +60,12 @@ public class Snmp {
         String idx = lnk.getOidIndex();
 
         String[] oids = new String[6];
-        oids[0] = ".1.3.6.1.2.1.31.1.1.1.6."  + idx; // ifHCInOctets
+        oids[0] = ".1.3.6.1.2.1.31.1.1.1.6." + idx; // ifHCInOctets
         oids[1] = ".1.3.6.1.2.1.31.1.1.1.10." + idx; // ifHCOutOctets
-        oids[2] = ".1.3.6.1.2.1.2.2.1.10."    + idx; // ifInOctets
-        oids[3] = ".1.3.6.1.2.1.2.2.1.16."    + idx; // ifOutOctets
-        oids[4] = ".1.3.6.1.2.1.2.2.1.7."     + idx; // ifAdminStatus
-        oids[5] = ".1.3.6.1.2.1.2.2.1.8."     + idx; // ifOperStatus
+        oids[2] = ".1.3.6.1.2.1.2.2.1.10." + idx; // ifInOctets
+        oids[3] = ".1.3.6.1.2.1.2.2.1.16." + idx; // ifOutOctets
+        oids[4] = ".1.3.6.1.2.1.2.2.1.7." + idx; // ifAdminStatus
+        oids[5] = ".1.3.6.1.2.1.2.2.1.8." + idx; // ifOperStatus
 
         org.snmp4j.Snmp snmp = null;
         long t0 = System.nanoTime();
@@ -86,6 +87,14 @@ public class Snmp {
                     AuthSHA.ID, new OctetString(lnk.getNodeSnmpSrc().getSnmpv3auth()),
                     PrivAES128.ID, new OctetString(lnk.getNodeSnmpSrc().getSnmpv3priv())
             );
+            if (lnk.getNodeSnmpSrc().getSnmpv3encr() != null && lnk.getNodeSnmpSrc().getSnmpv3encr().equals("DES")) {
+                user = new UsmUser(
+                        new OctetString(lnk.getNodeSnmpSrc().getSnmpv3username()),
+                        AuthSHA.ID, new OctetString(lnk.getNodeSnmpSrc().getSnmpv3auth()),
+                        PrivDES.ID, new OctetString(lnk.getNodeSnmpSrc().getSnmpv3priv())
+                );
+            }
+
             snmp.getUSM().addUser(user);
 
             // Target
@@ -130,13 +139,13 @@ public class Snmp {
             // Check SNMP errorStatus first
             int errStatus = responsePDU.getErrorStatus();
             if (errStatus != PDU.noError) {
-                String errText  = responsePDU.getErrorStatusText();
-                int    errIndex = responsePDU.getErrorIndex();
-                System.out.println("[SNMP WARN] link id:" + lnk.getID() +
-                        " oid index:" + lnk.getOidIndex() +
-                        " node:" + lnk.getNodeSnmpSrc().getNodeName() +
-                        " SNMP errorStatus=" + errStatus +
-                        " (" + errText + "), errorIndex=" + errIndex);
+                String errText = responsePDU.getErrorStatusText();
+                int errIndex = responsePDU.getErrorIndex();
+                System.out.println("[SNMP WARN] link id:" + lnk.getID()
+                        + " oid index:" + lnk.getOidIndex()
+                        + " node:" + lnk.getNodeSnmpSrc().getNodeName()
+                        + " SNMP errorStatus=" + errStatus
+                        + " (" + errText + "), errorIndex=" + errIndex);
                 return false;
             }
 
@@ -145,7 +154,7 @@ public class Snmp {
             // admin / oper: need at least entries for index 4 and 5
             if (vbCount >= 6) {
                 Variable adminVar = responsePDU.getVariableBindings().get(4).getVariable();
-                Variable operVar  = responsePDU.getVariableBindings().get(5).getVariable();
+                Variable operVar = responsePDU.getVariableBindings().get(5).getVariable();
 
                 // ifAdminStatus / ifOperStatus: 1=up, 2=down, 3=testing
                 // treat "2" as disabled/down
@@ -181,9 +190,9 @@ public class Snmp {
 
             // counters: we try HC (0,1) first, then fallback to classic (2,3)
             if (vbCount >= 4) {
-                Variable hcInVar  = responsePDU.getVariableBindings().get(0).getVariable();
+                Variable hcInVar = responsePDU.getVariableBindings().get(0).getVariable();
                 Variable hcOutVar = responsePDU.getVariableBindings().get(1).getVariable();
-                Variable in32Var  = responsePDU.getVariableBindings().get(2).getVariable();
+                Variable in32Var = responsePDU.getVariableBindings().get(2).getVariable();
                 Variable out32Var = responsePDU.getVariableBindings().get(3).getVariable();
 
                 Variable variableRx;
@@ -249,7 +258,8 @@ public class Snmp {
     }
 
     /**
-     * Helper: true if the variable is an SNMP exception (noSuchObject, noSuchInstance, etc.).
+     * Helper: true if the variable is an SNMP exception (noSuchObject,
+     * noSuchInstance, etc.).
      */
     private static boolean isException(Variable v) {
         if (v == null) {

@@ -12,10 +12,10 @@ import lombok.Setter;
  */
 public class Node extends JComponent implements Serializable {
 
-    private String nodeID, nodeName, ip, community, imagefilename, snmpv3username, snmpv3auth, snmpv3priv;
+    private String nodeID, nodeName, community, imagefilename, snmpv3username, snmpv3auth, snmpv3priv;
     @Getter
     @Setter
-    private String salt;
+    private String salt, snmpv3encr, ip;
 
     private Integer x, y, z, width, height, strwidth;
     private NodeInterface[] iflist = null;
@@ -83,10 +83,6 @@ public class Node extends JComponent implements Serializable {
         return this.community;
     }
 
-    public String getIp() {
-        return this.ip;
-    }
-
     public void setIfList(NodeInterface[] iflist) {
         this.iflist = iflist;
     }
@@ -101,10 +97,6 @@ public class Node extends JComponent implements Serializable {
 
     public void setNodeName(String name) {
         this.nodeName = name;
-    }
-
-    public void setIp(String ip) {
-        this.ip = ip;
     }
 
     public void setCommunity(String community) {

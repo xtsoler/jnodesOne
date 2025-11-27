@@ -142,10 +142,11 @@ public class OptionPaneMultiple {
             String snmpUser = node.getSnmpv3username();
             String authPass = node.getSnmpv3auth();
             String privPass = node.getSnmpv3priv();
+            String encr = node.getSnmpv3encr();
 
             try {
                 dataGenerator.snmpGetScriptList sl
-                        = new dataGenerator.snmpGetScriptList(ip, snmpUser, authPass, privPass);
+                        = new dataGenerator.snmpGetScriptList(ip, snmpUser, authPass, privPass, encr);
                 names = sl.getList();
                 idx = sl.getIndex();
             } catch (Exception ignore) {
@@ -173,6 +174,7 @@ public class OptionPaneMultiple {
         final String ipRef = ip;
         final String userRef = node.getSnmpv3username();
         final String authRef = node.getSnmpv3auth();
+        final String encrRef = node.getSnmpv3encr();
         final String privRef = node.getSnmpv3priv();
 
         JList<String> list = new JList<>(displayRef);
@@ -204,7 +206,7 @@ public class OptionPaneMultiple {
             int sel = list.getSelectedIndex();
             if (sel >= 0 && idxRef != null && sel < idxRef.length) {
                 // Run script via SNMPv3
-                dataGenerator.snmpSet.execute(ipRef, userRef, authRef, privRef, idxRef[sel], null);
+                dataGenerator.snmpSet.execute(ipRef, userRef, authRef, privRef, encrRef, idxRef[sel], null);
                 // Optionally give a quick toast-like confirmation
                 JOptionPane.showMessageDialog(
                         parentComponent,

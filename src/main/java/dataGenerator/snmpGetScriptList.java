@@ -13,6 +13,7 @@ import org.snmp4j.mp.MPv3;
 import org.snmp4j.mp.SnmpConstants;
 import org.snmp4j.security.AuthSHA;
 import org.snmp4j.security.PrivAES128;
+import org.snmp4j.security.PrivDES;
 import org.snmp4j.security.SecurityLevel;
 import org.snmp4j.security.SecurityModels;
 import org.snmp4j.security.SecurityProtocols;
@@ -35,27 +36,33 @@ public class snmpGetScriptList {
     private static final String MIKROTIK_SCRIPT_NAME_OID = "1.3.6.1.4.1.14988.1.1.8.1.1.2";
 
     private String[] scriptList = {};
-    private String[] indexList  = {};
+    private String[] indexList = {};
 
     private final String thehost;
     private final String theusername;
     private final String theauthPass;
     private final String theprivPass;
+    private final String theencr;
 
-    public snmpGetScriptList(String host, String username, String authPass, String privPass) {
+    public snmpGetScriptList(String host, String username, String authPass, String privPass, String encr) {
         this.thehost = host;
         this.theusername = username;
         this.theauthPass = authPass;
         this.theprivPass = privPass;
+        this.theencr = encr;
         update();
     }
 
-    /** Returns the SNMP table of script names and fills scriptList / indexList. */
+    /**
+     * Returns the SNMP table of script names and fills scriptList / indexList.
+     */
     private void update() {
-        snmpGetTableV3("udp:" + thehost + "/161", theusername, theauthPass, theprivPass, MIKROTIK_SCRIPT_NAME_OID);
+        snmpGetTableV3("udp:" + thehost + "/161", theusername, theauthPass, theprivPass, MIKROTIK_SCRIPT_NAME_OID, theencr);
     }
 
-    /** Find the MikroTik scripts-table index (OID suffix) by exact script name. */
+    /**
+     * Find the MikroTik scripts-table index (OID suffix) by exact script name.
+     */
     public String findIndex(String scriptName) {
         for (int i = 0; i < scriptList.length; i++) {
             if (scriptList[i].equals(scriptName)) {
@@ -73,8 +80,10 @@ public class snmpGetScriptList {
         return indexList;
     }
 
-    /** Perform an SNMPv3 walk similar to snmpGetIfList and fill arrays. */
-    private void snmpGetTableV3(String address, String username, String authPass, String privPass, String oidBase) {
+    /**
+     * Perform an SNMPv3 walk similar to snmpGetIfList and fill arrays.
+     */
+    private void snmpGetTableV3(String address, String username, String authPass, String privPass, String oidBase, String encr) {
         Snmp snmp = null;
         try {
             TransportMapping<UdpAddress> transport = new DefaultUdpTransportMapping();
@@ -85,13 +94,21 @@ public class snmpGetScriptList {
             USM usm = new USM(SecurityProtocols.getInstance(),
                     new OctetString(MPv3.createLocalEngineID()), 0);
             SecurityProtocols.getInstance().addAuthenticationProtocol(new AuthSHA());
+            //default is always AES128
             SecurityProtocols.getInstance().addPrivacyProtocol(new PrivAES128());
+            if (encr != null) {
+                if (encr.equals("AES128")) {
+                    SecurityProtocols.getInstance().addPrivacyProtocol(new PrivAES128());
+                } else if (encr.equals("DES")) {
+                    SecurityProtocols.getInstance().addPrivacyProtocol(new PrivDES());
+                }
+            }
             SecurityModels.getInstance().addSecurityModel(usm);
 
             UsmUser user = new UsmUser(
                     new OctetString(username),
-                    AuthSHA.ID,   new OctetString(authPass),
-                    PrivAES128.ID,new OctetString(privPass)
+                    AuthSHA.ID, new OctetString(authPass),
+                    PrivAES128.ID, new OctetString(privPass)
             );
             snmp.getUSM().addUser(user);
 
@@ -107,15 +124,21 @@ public class snmpGetScriptList {
 
             List<TreeEvent> output = walk(treeUtils, userTarget, new OID(oidBase));
 
-            ArrayList<String> names   = new ArrayList<>();
+            ArrayList<String> names = new ArrayList<>();
             ArrayList<String> indices = new ArrayList<>();
 
             for (TreeEvent event : output) {
-                if (event == null || event.isError()) continue;
-                if (event.getVariableBindings() == null) continue;
+                if (event == null || event.isError()) {
+                    continue;
+                }
+                if (event.getVariableBindings() == null) {
+                    continue;
+                }
 
                 for (VariableBinding vb : event.getVariableBindings()) {
-                    if (vb == null) continue;
+                    if (vb == null) {
+                        continue;
+                    }
                     // Script name
                     names.add(vb.getVariable().toString());
                     // Index = suffix of the row under the base OID
@@ -124,13 +147,16 @@ public class snmpGetScriptList {
             }
 
             scriptList = names.toArray(new String[0]);
-            indexList  = indices.toArray(new String[0]);
+            indexList = indices.toArray(new String[0]);
 
         } catch (Exception e) {
             e.printStackTrace();
         } finally {
             if (snmp != null) {
-                try { snmp.close(); } catch (Exception ignore) {}
+                try {
+                    snmp.close();
+                } catch (Exception ignore) {
+                }
             }
         }
     }
@@ -149,10 +175,13 @@ public class snmpGetScriptList {
     }
 
     private static class InternalTreeListener implements TreeListener {
+
         private final List<TreeEvent> collectedEvents;
         private final CountDownLatch latch = new CountDownLatch(1);
 
-        InternalTreeListener(List<TreeEvent> out) { this.collectedEvents = out; }
+        InternalTreeListener(List<TreeEvent> out) {
+            this.collectedEvents = out;
+        }
 
         @Override
         public synchronized boolean next(TreeEvent event) {

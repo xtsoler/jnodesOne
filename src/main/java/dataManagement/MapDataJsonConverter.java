@@ -37,11 +37,20 @@ public class MapDataJsonConverter {
         jsonNode.put("nodeID", node.getID());
         jsonNode.put("nodeName", node.getNodeName());
         jsonNode.put("ip", node.getIp());
-        jsonNode.put("nodeColor", node.getNodeColor().getRGB());
+        if (node.getNodeColor() != null) {
+            jsonNode.put("nodeColor", node.getNodeColor().getRGB());
+        } else {
+            jsonNode.put("nodeColor", Color.GRAY.getRGB());
+        }
         //jsonNode.put("community", node.getCommunity());
         if (node.getImagefilename() != null) {
             jsonNode.put("imagefilename", node.getImagefilename());
         }
+        
+        if (node.getSnmpv3encr() != null) {
+            jsonNode.put("snmpv3encr", node.getSnmpv3encr());
+        }
+        
         if (node.getSnmpv3username() != null) {
             jsonNode.put("snmpv3username", node.getSnmpv3username());
         }
@@ -136,6 +145,7 @@ public class MapDataJsonConverter {
 
         node.setSalt(jsonNode.optString("salt", null));
         node.setSnmpv3username(jsonNode.optString("snmpv3username", null));
+        node.setSnmpv3encr(jsonNode.optString("snmpv3encr", null));
         if (node.getSalt() == null) {// no salt on node so we assume all strings are unencrypted
             node.setSnmpv3auth(jsonNode.optString("snmpv3auth", null));
             node.setSnmpv3priv(jsonNode.optString("snmpv3priv", null));

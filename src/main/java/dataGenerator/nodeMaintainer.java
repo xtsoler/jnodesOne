@@ -119,7 +119,7 @@ public class nodeMaintainer implements Runnable {
                         && nodes[i].getIfList() == null
                         ) {
                     System.out.println("[SNMP INFO:] checking interfaces of node " + nodes[i].getNodeName() + " - " + nodes[i].getID());
-                    snmplist[i] = new snmpGetIfList(nodes[i].getIp(), nodes[i].getSnmpv3username(), nodes[i].getSnmpv3auth(), nodes[i].getSnmpv3priv());
+                    snmplist[i] = new snmpGetIfList(nodes[i].getIp(), nodes[i].getSnmpv3username(), nodes[i].getSnmpv3auth(), nodes[i].getSnmpv3priv(), nodes[i].getSnmpv3encr());
 
                     String[] tmp = snmplist[i].getList();
                     NodeInterface[] iflist = new NodeInterface[tmp.length];

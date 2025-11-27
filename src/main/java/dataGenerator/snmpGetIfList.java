@@ -17,6 +17,7 @@ import org.snmp4j.mp.MPv3;
 import org.snmp4j.mp.SnmpConstants;
 import org.snmp4j.security.AuthSHA;
 import org.snmp4j.security.PrivAES128;
+import org.snmp4j.security.PrivDES;
 import org.snmp4j.security.SecurityLevel;
 import org.snmp4j.security.SecurityModels;
 import org.snmp4j.security.SecurityProtocols;
@@ -38,19 +39,20 @@ public class snmpGetIfList {
 
     String[] nameList = {};
     String[] indexList = {};
-    String thehost, theusername, theauthPass, theprivPass;
+    String thehost, theusername, theauthPass, theprivPass, theencr;
 
-    public snmpGetIfList(String host, String username, String authPass, String privPass) {
+    public snmpGetIfList(String host, String username, String authPass, String privPass, String encr) {
         thehost = host;
         theusername = username;
         theauthPass = authPass;
         theprivPass = privPass;
+        theencr = encr;
         update();
     }
 
     private void update() {
         String oidValue = "1.3.6.1.2.1.2.2.1.2"; // ifDescr table
-        snmpGetTableV3("udp:" + thehost + "/161", theusername, theauthPass, theprivPass, oidValue);
+        snmpGetTableV3("udp:" + thehost + "/161", theusername, theauthPass, theprivPass, oidValue, theencr);
     }
 
     public static List<Object> convertTreeEventToList(TreeSelectionEvent event) {
@@ -82,7 +84,7 @@ public class snmpGetIfList {
         return walkResult;
     }
 
-    public void snmpGetTableV3(String address, String username, String authPass, String privPass, String oidValue) {
+    public void snmpGetTableV3(String address, String username, String authPass, String privPass, String oidValue, String encr) {
         Snmp snmp = null;
         try {
             TransportMapping<UdpAddress> transport = new DefaultUdpTransportMapping();
@@ -99,6 +101,12 @@ public class snmpGetIfList {
                     new OctetString(username),
                     AuthSHA.ID, new OctetString(authPass),
                     PrivAES128.ID, new OctetString(privPass));
+            if (encr != null && encr.equals("DES")) {
+                user = new UsmUser(
+                        new OctetString(username),
+                        AuthSHA.ID, new OctetString(authPass),
+                        PrivDES.ID, new OctetString(privPass));
+            }
             // non-deprecated overload
             snmp.getUSM().addUser(user);
 
