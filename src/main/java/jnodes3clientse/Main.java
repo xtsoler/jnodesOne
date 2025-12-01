@@ -13,6 +13,7 @@ package jnodes3clientse;
 //import dataGenerator.snmpGetIfList;
 import java.awt.Container;
 import java.awt.Toolkit;
+import java.io.File;
 import java.io.IOException;
 import javax.swing.JDialog;
 import javax.swing.JFrame;
@@ -46,7 +47,7 @@ public class Main extends javax.swing.JFrame {
         initComponents();
         setIconImage(Toolkit.getDefaultToolkit().getImage(Main.class.getClassLoader().getResource("jnodes.png")));
 
-        dataManagement.storage.addMapFromFile();
+        dataManagement.storage.addMapFromFile("map.json");
 
         setSize(600, 350);
         setTitle("JnodesOne version 1.2");

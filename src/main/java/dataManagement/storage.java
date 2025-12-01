@@ -46,13 +46,13 @@ public class storage {
         maplist.put(id, m);
     }
 
-    public static boolean addMapFromFile() {
+    public static boolean addMapFromFile(String filename) {
         boolean succeeded = true;
         message.mapData s = null;
-        File file = new File("map.json");
-        if (file.exists()) {
+        
+        if ((new File(filename)).exists()) {
             //s = (message.mapData) tools.ByteArrayUtils.getObject(tools.ByteArrayUtils.getBytesFromFile("tmp.mpd"));
-            s = loadMapDataFromJsonFile("map.json");
+            s = loadMapDataFromJsonFile(filename);
             if (s != null) {
                 char[] p = {'d', 'e', 'm', 'o'};
                 mapManager m = null;
