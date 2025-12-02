@@ -215,7 +215,7 @@ public class Link implements Serializable {
             //edw typonetai to string pou exei to bandwidth
             if (getCurrentTime() == null || (System.currentTimeMillis() - getCurrentTime()) > 240000) { // the rates are very old, don't display them
                 g.drawString(" // ", rectx, recty + 4);
-            } else if (getCurrentTime() - getPreviousTime() > 30000L) {
+            } else if (getPreviousTime() == null || getCurrentTime() - getPreviousTime() > 30000L) {
                 g.drawString(" .. ", rectx, recty + 4);
             } else {
                 if (!adminEnabled) {

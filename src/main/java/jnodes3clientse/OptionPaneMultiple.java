@@ -47,7 +47,8 @@ public class OptionPaneMultiple {
 
     private NodeInterface[] iflist = {};
     private final Component parentComponent;
-    private NodeEditor nn;
+    private NodeEditor ne;
+    private NodeInfo ni;
 
     public OptionPaneMultiple(Component parentComponent) {
         this.parentComponent = parentComponent;
@@ -55,10 +56,10 @@ public class OptionPaneMultiple {
 
     // ---- edit node ----
     public void editNode(Node node) {
-        nn = new NodeEditor(node);
+        ne = new NodeEditor(node);
         Object[] options = {"Ok", "Cancel"};
         JOptionPane op = new JOptionPane(
-                nn,
+                ne,
                 JOptionPane.PLAIN_MESSAGE,
                 JOptionPane.OK_CANCEL_OPTION,
                 null,
@@ -98,7 +99,7 @@ public class OptionPaneMultiple {
         input2.setText(node.getIp());
         input2.setEditable(false);
 
-        String[] items2 = {};
+        String[] items2;
         iflist = node.getIfList();
         if (iflist != null) {
             items2 = new String[iflist.length];
@@ -124,6 +125,26 @@ public class OptionPaneMultiple {
 
         JDialog dialog = op.createDialog(parentComponent, node.getNodeName() + " node details ");
         dialog.setVisible(true);
+    }
+    
+    // ---- node info ----
+    public void nodeInfo2(Node node) {
+        ni = new NodeInfo(node);
+        Object[] options = {"Ok"};
+        JOptionPane op = new JOptionPane(
+                ni,
+                JOptionPane.PLAIN_MESSAGE,
+                JOptionPane.OK_OPTION,
+                null,
+                options);
+
+        JDialog dialog = op.createDialog(parentComponent, node.getNodeName() + " node details ");
+        dialog.setVisible(true);
+        Object selectedValue = op.getValue();
+
+        if (selectedValue != null && selectedValue.equals("Ok")) {
+            completed = true;
+        }
     }
 
     // ---- node scripts (styled like nodeInfo) ----
@@ -367,10 +388,10 @@ public class OptionPaneMultiple {
         input2 = new JTextField(5);
         input3 = new JTextField(5);
 
-        nn = new NodeEditor();
+        ne = new NodeEditor();
         Object[] options = {"Ok", "Cancel"};
         JOptionPane op = new JOptionPane(
-                nn,
+                ne,
                 JOptionPane.PLAIN_MESSAGE,
                 JOptionPane.OK_CANCEL_OPTION,
                 null,
@@ -416,7 +437,7 @@ public class OptionPaneMultiple {
     }
 
     public Node getSelectionNode() {
-        return nn.getSelection();
+        return ne.getSelection();
     }
 
     public char[] getPassword() {

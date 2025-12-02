@@ -752,7 +752,7 @@ public class mainAnim extends JComponent implements MouseListener, MouseMotionLi
 
             } else if (evt.getSource() == infoNode) {
                 OptionPaneMultiple opt = new OptionPaneMultiple(this);
-                opt.nodeInfo(nodes[nodeSelected]);
+                opt.nodeInfo2(nodes[nodeSelected]);
             } else if (evt.getSource() == scriptList) {
                 OptionPaneMultiple opt = new OptionPaneMultiple(this);
                 opt.nodeScripts(nodes[nodeSelected]);
