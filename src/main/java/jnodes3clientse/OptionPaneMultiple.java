@@ -90,44 +90,6 @@ public class OptionPaneMultiple {
     }
 
     // ---- node info ----
-    public void nodeInfo(Node node) {
-        input1 = new JTextField(5);
-        input1.setText(node.getNodeName());
-        input1.setEditable(false);
-
-        input2 = new JTextField(5);
-        input2.setText(node.getIp());
-        input2.setEditable(false);
-
-        String[] items2;
-        iflist = node.getIfList();
-        if (iflist != null) {
-            items2 = new String[iflist.length];
-            for (int i = 0; i < iflist.length; i++) {
-                items2[i] = iflist[i].getLabel();
-            }
-        } else {
-            items2 = new String[1];
-            items2[0] = "(interface scan pending)";
-        }
-
-        JList<String> list = new JList<>(items2);
-        JScrollPane scrollPane = new JScrollPane(list);
-        Object[] msg = {"Name:", input1, "Ip address:", input2, "interfaces", scrollPane};
-
-        Object[] options = {"Ok"};
-        JOptionPane op = new JOptionPane(
-                msg,
-                JOptionPane.PLAIN_MESSAGE,
-                JOptionPane.OK_CANCEL_OPTION,
-                null,
-                options);
-
-        JDialog dialog = op.createDialog(parentComponent, node.getNodeName() + " node details ");
-        dialog.setVisible(true);
-    }
-    
-    // ---- node info ----
     public void nodeInfo2(Node node) {
         ni = new NodeInfo(node);
         Object[] options = {"Ok"};
@@ -139,6 +101,8 @@ public class OptionPaneMultiple {
                 options);
 
         JDialog dialog = op.createDialog(parentComponent, node.getNodeName() + " node details ");
+        dialog.setResizable(true);   // <-- allow resizing
+        dialog.pack();               // optional: recompute preferred size
         dialog.setVisible(true);
         Object selectedValue = op.getValue();
 

@@ -12,10 +12,10 @@ package jnodes3clientse;
 
 import dataGenerator.snmpGetIfList;
 import dataGenerator.snmpGetMACList;
+import dataGenerator.snmpGetARPList;
 import java.util.ArrayList;
 import java.util.List;
 import javax.swing.DefaultListModel;
-import javax.swing.JList;
 import javax.swing.table.AbstractTableModel;
 import mapElements.Node;
 import mapElements.NodeInterface;
@@ -34,6 +34,9 @@ public class NodeInfo extends javax.swing.JPanel {
     // Table model for "Connected devices"
     private final ConnectedDevicesTableModel connectedTableModel = new ConnectedDevicesTableModel();
 
+    // Table model for "ARP table"
+    private final ArpTableModel arpTableModel = new ArpTableModel();
+
     public NodeInfo(Node node) {
         theNode = node;
         initComponents();
@@ -48,10 +51,15 @@ public class NodeInfo extends javax.swing.JPanel {
             ifList.setModel(new DefaultListModel<String>());
         }
 
-        // ----- Connected devices tab (table) -----
+        // ----- MAC table tab -----
         jTable1.setModel(connectedTableModel);
         jTable1.setFillsViewportHeight(true);
         jTable1.setAutoCreateRowSorter(true);  // click column headers to sort
+
+        // ----- ARP table tab -----
+        jTable2.setModel(arpTableModel);
+        jTable2.setFillsViewportHeight(true);
+        jTable2.setAutoCreateRowSorter(true);  // click column headers to sort
 
         populateList(node);
     }
@@ -112,6 +120,10 @@ public class NodeInfo extends javax.swing.JPanel {
         jButton2 = new javax.swing.JButton();
         jScrollPane3 = new javax.swing.JScrollPane();
         jTable1 = new javax.swing.JTable();
+        jPanel3 = new javax.swing.JPanel();
+        jButton3 = new javax.swing.JButton();
+        jScrollPane2 = new javax.swing.JScrollPane();
+        jTable2 = new javax.swing.JTable();
 
         ipField.setEditable(false);
         ipField.addActionListener(new java.awt.event.ActionListener() {
@@ -156,7 +168,7 @@ public class NodeInfo extends javax.swing.JPanel {
                 .addContainerGap()
                 .addComponent(jButton1)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(jScrollPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 297, Short.MAX_VALUE))
+                .addComponent(jScrollPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 272, Short.MAX_VALUE))
         );
 
         jTabbedPane1.addTab("Interfaces", jPanel1);
@@ -197,10 +209,51 @@ public class NodeInfo extends javax.swing.JPanel {
                 .addContainerGap()
                 .addComponent(jButton2)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(jScrollPane3, javax.swing.GroupLayout.DEFAULT_SIZE, 297, Short.MAX_VALUE))
+                .addComponent(jScrollPane3, javax.swing.GroupLayout.DEFAULT_SIZE, 272, Short.MAX_VALUE))
         );
 
-        jTabbedPane1.addTab("Connected devices", jPanel2);
+        jTabbedPane1.addTab("MAC table", jPanel2);
+
+        jButton3.setText("SNMP query now");
+        jButton3.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButton3ActionPerformed(evt);
+            }
+        });
+
+        jTable2.setModel(new javax.swing.table.DefaultTableModel(
+            new Object [][] {
+                {null, null, null, null},
+                {null, null, null, null},
+                {null, null, null, null},
+                {null, null, null, null}
+            },
+            new String [] {
+                "Title 1", "Title 2", "Title 3", "Title 4"
+            }
+        ));
+        jScrollPane2.setViewportView(jTable2);
+
+        javax.swing.GroupLayout jPanel3Layout = new javax.swing.GroupLayout(jPanel3);
+        jPanel3.setLayout(jPanel3Layout);
+        jPanel3Layout.setHorizontalGroup(
+            jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(jPanel3Layout.createSequentialGroup()
+                .addContainerGap()
+                .addComponent(jButton3, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addContainerGap())
+            .addComponent(jScrollPane2, javax.swing.GroupLayout.DEFAULT_SIZE, 403, Short.MAX_VALUE)
+        );
+        jPanel3Layout.setVerticalGroup(
+            jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(jPanel3Layout.createSequentialGroup()
+                .addContainerGap()
+                .addComponent(jButton3)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addComponent(jScrollPane2, javax.swing.GroupLayout.DEFAULT_SIZE, 272, Short.MAX_VALUE))
+        );
+
+        jTabbedPane1.addTab("ARP table", jPanel3);
 
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(this);
         this.setLayout(layout);
@@ -216,7 +269,7 @@ public class NodeInfo extends javax.swing.JPanel {
                             .addComponent(jLabel3))
                         .addGap(106, 106, 106)
                         .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addComponent(nameField, javax.swing.GroupLayout.DEFAULT_SIZE, 240, Short.MAX_VALUE)
+                            .addComponent(nameField)
                             .addComponent(ipField))))
                 .addContainerGap())
         );
@@ -292,22 +345,122 @@ public class NodeInfo extends javax.swing.JPanel {
         }
     }//GEN-LAST:event_jButton2ActionPerformed
 
+    private void jButton3ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton3ActionPerformed
+        // TODO add your handling code here:
+// SNMP query for ARP table
+        if (theNode.getIp() != null && !theNode.getIp().isEmpty()
+                && theNode.getSnmpv3username() != null && !theNode.getSnmpv3username().isEmpty()
+                && theNode.getSnmpv3auth() != null && !theNode.getSnmpv3auth().isEmpty()
+                && theNode.getSnmpv3priv() != null && !theNode.getSnmpv3priv().isEmpty()) {
+
+            System.out.println("[SNMP INFO:] checking ARP table of node "
+                    + theNode.getNodeName() + " - " + theNode.getID());
+
+            snmpGetARPList snmplist = new snmpGetARPList(
+                    theNode.getIp(),
+                    theNode.getSnmpv3username(),
+                    theNode.getSnmpv3auth(),
+                    theNode.getSnmpv3priv(),
+                    theNode.getSnmpv3encr()
+            );
+
+            java.util.List<snmpGetARPList.ArpEntry> arpEntries = snmplist.getNeighbors();
+
+            if (arpEntries == null || arpEntries.isEmpty()) {
+                arpTableModel.setEntries(null);
+            } else {
+                arpTableModel.setEntries(arpEntries);
+            }
+        }
+    }//GEN-LAST:event_jButton3ActionPerformed
+
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JList<String> ifList;
     private javax.swing.JTextField ipField;
     private javax.swing.JButton jButton1;
     private javax.swing.JButton jButton2;
+    private javax.swing.JButton jButton3;
     private javax.swing.JLabel jLabel1;
     private javax.swing.JLabel jLabel3;
     private javax.swing.JPanel jPanel1;
     private javax.swing.JPanel jPanel2;
+    private javax.swing.JPanel jPanel3;
     private javax.swing.JScrollPane jScrollPane1;
+    private javax.swing.JScrollPane jScrollPane2;
     private javax.swing.JScrollPane jScrollPane3;
     private javax.swing.JTabbedPane jTabbedPane1;
     private javax.swing.JTable jTable1;
+    private javax.swing.JTable jTable2;
     private javax.swing.JTextField nameField;
     // End of variables declaration//GEN-END:variables
-private class ConnectedDevicesTableModel extends AbstractTableModel {
+private class ArpTableModel extends AbstractTableModel {
+
+        private final String[] columns = {"IP Address", "MAC Address", "Interface", "Type"};
+        private List<snmpGetARPList.ArpEntry> entries = new ArrayList<>();
+
+        public void setEntries(List<snmpGetARPList.ArpEntry> list) {
+            if (list != null) {
+                entries = new ArrayList<>(list);
+            } else {
+                entries = new ArrayList<>();
+            }
+            fireTableDataChanged();
+        }
+
+        @Override
+        public int getRowCount() {
+            return entries.size();
+        }
+
+        @Override
+        public int getColumnCount() {
+            return columns.length;
+        }
+
+        @Override
+        public String getColumnName(int column) {
+            return columns[column];
+        }
+
+        @Override
+        public Object getValueAt(int rowIndex, int columnIndex) {
+            snmpGetARPList.ArpEntry e = entries.get(rowIndex);
+
+            switch (columnIndex) {
+                case 0: // IP Address
+                    return e.ip;
+
+                case 1: // MAC Address
+                    return e.mac;
+
+                case 2: // Interface
+                    // Prefer ifName from SNMP, otherwise resolve from local iflist
+                    if (e.ifName != null && !e.ifName.isEmpty()) {
+                        return e.ifName;
+                    }
+                    return getIfLabelForIndex(e.ifIndex);
+
+                case 3: // Type (human readable)
+                    switch (e.type) {
+                        case 1:
+                            return "other";
+                        case 2:
+                            return "invalid";
+                        case 3:
+                            return "dynamic";
+                        case 4:
+                            return "static";
+                        default:
+                            return "unknown";
+                    }
+
+                default:
+                    return "";
+            }
+        }
+    }
+
+    private class ConnectedDevicesTableModel extends AbstractTableModel {
 
         private final String[] columns = {"MAC Address", "Interface", "Status"};
         private List<snmpGetMACList.NeighborEntry> neighbors = new ArrayList<>();
