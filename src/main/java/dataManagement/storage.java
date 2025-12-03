@@ -19,6 +19,19 @@ public class storage {
 
     public static dbase<mapManager> maplist = new dbase<mapManager>("mapBase");
 
+    public static mapData getMapDataById(String mapId) {
+        mapManager mp = maplist.getEntry(mapId);
+        return (mp != null) ? mp.getMapData() : null;
+    }
+
+    public static String getFirstMapId() {
+        Iterator keys = maplist.keySet().iterator();
+        if (keys.hasNext()) {
+            return (String) keys.next();
+        }
+        return null;
+    }
+
     public static void updateMap(mapData map) {
         maplist.getEntry(map.getID()).updateMap(map);
         //tools.ByteArrayUtils.writeBytes2File(tools.ByteArrayUtils.getSerializedBytes(map), "tmp.mpd");
@@ -37,19 +50,20 @@ public class storage {
         maplist.deleteEntry(mapId);
     }
 
-    public static void addMap(String name, String descr, String owner, char[] pass) {
+    public static String addMap(String name, String descr, String owner, char[] pass) {
         mapManager m = null;
         String id = maplist.addEntry(m);
         m = new mapManager(id, name, descr, owner, pass);
         m.updateMap(new mapData(id));
         m.start();
         maplist.put(id, m);
+        return id;
     }
 
-    public static boolean addMapFromFile(String filename) {
-        boolean succeeded = true;
+    public static String addMapFromFile(String filename) {
+        String new_id = null;
         message.mapData s = null;
-        
+
         if ((new File(filename)).exists()) {
             //s = (message.mapData) tools.ByteArrayUtils.getObject(tools.ByteArrayUtils.getBytesFromFile("tmp.mpd"));
             s = loadMapDataFromJsonFile(filename);
@@ -67,19 +81,18 @@ public class storage {
                 m.updateMap(map1);
                 m.start();
                 maplist.put(id, m);
+                new_id = id;
             } else {
                 tools.ModalMsg.display("Invalid or old versioned map file. Map file was cleared.");
-                succeeded = false;
                 char[] a = {'o', 'k'};
-                addMap("asd", "asd", "asd", a);
+                new_id = addMap("asd", "asd", "asd", a);
             }
         } else {
-            succeeded = false;
             char[] a = {'o', 'k'};
-            addMap("asd", "asd", "asd", a);
+            new_id = addMap("asd", "asd", "asd", a);
         }
 
-        return succeeded;
+        return new_id;
     }
 
     public static byte[] getMapList() {

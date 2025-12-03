@@ -112,9 +112,12 @@ public class mapManager extends Thread {
             //userBase.broadcastConnected((byte) 57, id, tools.ByteArrayUtils.getSerializedBytes(getMapData()));
             jnodes3clientse.Main.updateMapMonitor(getMapData());
         }
+        System.out.println("mapManager: exitted while()");
     }
 
     public void kill() {
         alive = false;
+        pinger.stop();
+        snmperLink.kill();
     }
 }
