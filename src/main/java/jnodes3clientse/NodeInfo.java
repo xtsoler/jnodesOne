@@ -11,8 +11,12 @@
 package jnodes3clientse;
 
 import dataGenerator.snmpGetIfList;
+import dataGenerator.snmpGetMACList;
+import java.util.ArrayList;
+import java.util.List;
 import javax.swing.DefaultListModel;
 import javax.swing.JList;
+import javax.swing.table.AbstractTableModel;
 import mapElements.Node;
 import mapElements.NodeInterface;
 
@@ -23,12 +27,18 @@ import mapElements.NodeInterface;
 public class NodeInfo extends javax.swing.JPanel {
 
     private final DefaultListModel<String> ifModel = new DefaultListModel<>();
+
     private NodeInterface[] iflist = {};
     Node theNode = null;
+
+    // Table model for "Connected devices"
+    private final ConnectedDevicesTableModel connectedTableModel = new ConnectedDevicesTableModel();
 
     public NodeInfo(Node node) {
         theNode = node;
         initComponents();
+
+        // ----- Interfaces tab -----
         ifList.setModel(ifModel);
         if (ifList == null) {
             ifList = new javax.swing.JList<>();
@@ -37,8 +47,13 @@ public class NodeInfo extends javax.swing.JPanel {
         if (!(ifList.getModel() instanceof DefaultListModel)) {
             ifList.setModel(new DefaultListModel<String>());
         }
-        populateList(node);
 
+        // ----- Connected devices tab (table) -----
+        jTable1.setModel(connectedTableModel);
+        jTable1.setFillsViewportHeight(true);
+        jTable1.setAutoCreateRowSorter(true);  // click column headers to sort
+
+        populateList(node);
     }
 
     private void populateList(Node node) {
@@ -53,6 +68,26 @@ public class NodeInfo extends javax.swing.JPanel {
         } else {
             ifModel.addElement("(interface scan pending)");
         }
+    }
+
+    private String getIfLabelForIndex(int ifIndex) {
+        if (iflist == null) {
+            return "ifIndex=" + ifIndex;
+        }
+
+        String idxStr = Integer.toString(ifIndex);
+        for (NodeInterface ni : iflist) {
+            if (ni == null) {
+                continue;
+            }
+
+            // Adjust getter names if different in your NodeInterface
+            String nodeIfIndex = ni.getIndex();   // assuming index is stored as String
+            if (nodeIfIndex != null && nodeIfIndex.equals(idxStr)) {
+                return ni.getLabel();
+            }
+        }
+        return "ifIndex=" + ifIndex;
     }
 
     /**
@@ -73,6 +108,10 @@ public class NodeInfo extends javax.swing.JPanel {
         jButton1 = new javax.swing.JButton();
         jScrollPane1 = new javax.swing.JScrollPane();
         ifList = new javax.swing.JList<>();
+        jPanel2 = new javax.swing.JPanel();
+        jButton2 = new javax.swing.JButton();
+        jScrollPane3 = new javax.swing.JScrollPane();
+        jTable1 = new javax.swing.JTable();
 
         ipField.setEditable(false);
         ipField.addActionListener(new java.awt.event.ActionListener() {
@@ -107,7 +146,7 @@ public class NodeInfo extends javax.swing.JPanel {
             jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(jPanel1Layout.createSequentialGroup()
                 .addContainerGap()
-                .addComponent(jButton1, javax.swing.GroupLayout.DEFAULT_SIZE, 392, Short.MAX_VALUE)
+                .addComponent(jButton1, javax.swing.GroupLayout.DEFAULT_SIZE, 391, Short.MAX_VALUE)
                 .addContainerGap())
             .addComponent(jScrollPane1, javax.swing.GroupLayout.Alignment.TRAILING)
         );
@@ -117,10 +156,51 @@ public class NodeInfo extends javax.swing.JPanel {
                 .addContainerGap()
                 .addComponent(jButton1)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(jScrollPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 205, Short.MAX_VALUE))
+                .addComponent(jScrollPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 297, Short.MAX_VALUE))
         );
 
         jTabbedPane1.addTab("Interfaces", jPanel1);
+
+        jButton2.setText("SNMP query now");
+        jButton2.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButton2ActionPerformed(evt);
+            }
+        });
+
+        jTable1.setModel(new javax.swing.table.DefaultTableModel(
+            new Object [][] {
+                {null, null, null, null},
+                {null, null, null, null},
+                {null, null, null, null},
+                {null, null, null, null}
+            },
+            new String [] {
+                "Title 1", "Title 2", "Title 3", "Title 4"
+            }
+        ));
+        jScrollPane3.setViewportView(jTable1);
+
+        javax.swing.GroupLayout jPanel2Layout = new javax.swing.GroupLayout(jPanel2);
+        jPanel2.setLayout(jPanel2Layout);
+        jPanel2Layout.setHorizontalGroup(
+            jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addComponent(jScrollPane3, javax.swing.GroupLayout.DEFAULT_SIZE, 403, Short.MAX_VALUE)
+            .addGroup(jPanel2Layout.createSequentialGroup()
+                .addContainerGap()
+                .addComponent(jButton2, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addContainerGap())
+        );
+        jPanel2Layout.setVerticalGroup(
+            jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(jPanel2Layout.createSequentialGroup()
+                .addContainerGap()
+                .addComponent(jButton2)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addComponent(jScrollPane3, javax.swing.GroupLayout.DEFAULT_SIZE, 297, Short.MAX_VALUE))
+        );
+
+        jTabbedPane1.addTab("Connected devices", jPanel2);
 
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(this);
         this.setLayout(layout);
@@ -129,14 +209,14 @@ public class NodeInfo extends javax.swing.JPanel {
             .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
                 .addContainerGap()
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
-                    .addComponent(jTabbedPane1)
-                    .addGroup(javax.swing.GroupLayout.Alignment.LEADING, layout.createSequentialGroup()
+                    .addComponent(jTabbedPane1, javax.swing.GroupLayout.PREFERRED_SIZE, 0, Short.MAX_VALUE)
+                    .addGroup(layout.createSequentialGroup()
                         .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                             .addComponent(jLabel1)
                             .addComponent(jLabel3))
                         .addGap(106, 106, 106)
                         .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addComponent(nameField)
+                            .addComponent(nameField, javax.swing.GroupLayout.DEFAULT_SIZE, 240, Short.MAX_VALUE)
                             .addComponent(ipField))))
                 .addContainerGap())
         );
@@ -183,15 +263,115 @@ public class NodeInfo extends javax.swing.JPanel {
         }
     }//GEN-LAST:event_jButton1ActionPerformed
 
+    private void jButton2ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton2ActionPerformed
+        // SNMP query for connected devices (MAC table / neighbors)
+        if (theNode.getIp() != null && !theNode.getIp().isEmpty()
+                && theNode.getSnmpv3username() != null && !theNode.getSnmpv3username().isEmpty()
+                && theNode.getSnmpv3auth() != null && !theNode.getSnmpv3auth().isEmpty()
+                && theNode.getSnmpv3priv() != null && !theNode.getSnmpv3priv().isEmpty()) {
+
+            System.out.println("[SNMP INFO:] checking connected devices of node "
+                    + theNode.getNodeName() + " - " + theNode.getID());
+
+            snmpGetMACList snmplist = new snmpGetMACList(
+                    theNode.getIp(),
+                    theNode.getSnmpv3username(),
+                    theNode.getSnmpv3auth(),
+                    theNode.getSnmpv3priv(),
+                    theNode.getSnmpv3encr()
+            );
+
+            java.util.List<snmpGetMACList.NeighborEntry> neighbors = snmplist.getNeighbors();
+
+            // If null/empty: simply clear the table
+            if (neighbors == null || neighbors.isEmpty()) {
+                connectedTableModel.setNeighbors(null);
+            } else {
+                connectedTableModel.setNeighbors(neighbors);
+            }
+        }
+    }//GEN-LAST:event_jButton2ActionPerformed
+
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JList<String> ifList;
     private javax.swing.JTextField ipField;
     private javax.swing.JButton jButton1;
+    private javax.swing.JButton jButton2;
     private javax.swing.JLabel jLabel1;
     private javax.swing.JLabel jLabel3;
     private javax.swing.JPanel jPanel1;
+    private javax.swing.JPanel jPanel2;
     private javax.swing.JScrollPane jScrollPane1;
+    private javax.swing.JScrollPane jScrollPane3;
     private javax.swing.JTabbedPane jTabbedPane1;
+    private javax.swing.JTable jTable1;
     private javax.swing.JTextField nameField;
     // End of variables declaration//GEN-END:variables
+private class ConnectedDevicesTableModel extends AbstractTableModel {
+
+        private final String[] columns = {"MAC Address", "Interface", "Status"};
+        private List<snmpGetMACList.NeighborEntry> neighbors = new ArrayList<>();
+
+        public void setNeighbors(List<snmpGetMACList.NeighborEntry> list) {
+            if (list != null) {
+                neighbors = new ArrayList<>(list);
+            } else {
+                neighbors = new ArrayList<>();
+            }
+            fireTableDataChanged();
+        }
+
+        @Override
+        public int getRowCount() {
+            return neighbors.size();
+        }
+
+        @Override
+        public int getColumnCount() {
+            return columns.length;
+        }
+
+        @Override
+        public String getColumnName(int column) {
+            return columns[column];
+        }
+
+        @Override
+        public Object getValueAt(int rowIndex, int columnIndex) {
+            snmpGetMACList.NeighborEntry n = neighbors.get(rowIndex);
+
+            switch (columnIndex) {
+                case 0: // MAC Address
+                    return n.mac;
+
+                case 1: // Interface label
+                    // if snmpGetMACList fills ifName, you can use that directly:
+                    if (n.ifName != null && !n.ifName.isEmpty()) {
+                        return n.ifName;
+                    }
+                    // fallback using our local NodeInterface list:
+                    return getIfLabelForIndex(n.ifIndex);
+
+                case 2: // Status, human readable
+                    switch (n.fdbStatus) {
+                        case 1:
+                            return "other";
+                        case 2:
+                            return "invalid";
+                        case 3:
+                            return "learned";
+                        case 4:
+                            return "self";
+                        case 5:
+                            return "mgmt";
+                        default:
+                            return "unknown";
+                    }
+
+                default:
+                    return "";
+            }
+        }
+    }
+
 }
