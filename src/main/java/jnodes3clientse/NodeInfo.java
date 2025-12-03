@@ -10,6 +10,7 @@
  */
 package jnodes3clientse;
 
+import dataGenerator.snmpGetIfList;
 import javax.swing.DefaultListModel;
 import javax.swing.JList;
 import mapElements.Node;
@@ -23,8 +24,10 @@ public class NodeInfo extends javax.swing.JPanel {
 
     private final DefaultListModel<String> ifModel = new DefaultListModel<>();
     private NodeInterface[] iflist = {};
+    Node theNode = null;
 
     public NodeInfo(Node node) {
+        theNode = node;
         initComponents();
         ifList.setModel(ifModel);
         if (ifList == null) {
@@ -160,6 +163,24 @@ public class NodeInfo extends javax.swing.JPanel {
 
     private void jButton1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton1ActionPerformed
         // TODO add your handling code here:
+        if (theNode.getIp() != null && !theNode.getIp().isEmpty()
+                && theNode.getSnmpv3username() != null && !theNode.getSnmpv3username().isEmpty()
+                && theNode.getSnmpv3auth() != null && !theNode.getSnmpv3auth().isEmpty()
+                && theNode.getSnmpv3priv() != null && !theNode.getSnmpv3priv().isEmpty()) {
+            System.out.println("[SNMP INFO:] checking interfaces of node " + theNode.getNodeName() + " - " + theNode.getID());
+            snmpGetIfList snmplist = new snmpGetIfList(theNode.getIp(), theNode.getSnmpv3username(), theNode.getSnmpv3auth(), theNode.getSnmpv3priv(), theNode.getSnmpv3encr());
+
+            String[] tmp = snmplist.getList();
+            NodeInterface[] iflist = new NodeInterface[tmp.length];
+            String[] index = snmplist.getIndex();
+            for (int j = 0; j < tmp.length; j++) {
+                //System.out.print(index[j]);
+                //System.out.println(" " + tmp[j]);
+                iflist[j] = new NodeInterface(tmp[j], tmp[j] + "(" + index[j] + ")", index[j]);
+            }
+            theNode.setIfList(iflist);
+            populateList(theNode);
+        }
     }//GEN-LAST:event_jButton1ActionPerformed
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
