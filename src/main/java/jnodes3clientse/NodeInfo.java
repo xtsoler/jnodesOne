@@ -171,14 +171,14 @@ public class NodeInfo extends javax.swing.JPanel {
             snmpGetIfList snmplist = new snmpGetIfList(theNode.getIp(), theNode.getSnmpv3username(), theNode.getSnmpv3auth(), theNode.getSnmpv3priv(), theNode.getSnmpv3encr());
 
             String[] tmp = snmplist.getList();
-            NodeInterface[] iflist = new NodeInterface[tmp.length];
+            NodeInterface[] nodeIfList = new NodeInterface[tmp.length];
             String[] index = snmplist.getIndex();
             for (int j = 0; j < tmp.length; j++) {
                 //System.out.print(index[j]);
                 //System.out.println(" " + tmp[j]);
-                iflist[j] = new NodeInterface(tmp[j], tmp[j] + "(" + index[j] + ")", index[j]);
+                nodeIfList[j] = new NodeInterface(tmp[j], tmp[j] + "(" + index[j] + ")", index[j]);
             }
-            theNode.setIfList(iflist);
+            theNode.setIfList(nodeIfList);
             populateList(theNode);
         }
     }//GEN-LAST:event_jButton1ActionPerformed
