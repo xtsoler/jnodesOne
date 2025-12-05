@@ -2,6 +2,8 @@ package mapElements;
 
 import java.awt.*;
 import java.io.Serializable;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import javax.swing.ImageIcon;
 import javax.swing.JComponent;
 import lombok.Getter;
@@ -48,7 +50,18 @@ public class Node extends JComponent implements Serializable {
         community = whatcom;
         this.imagefilename = imagefilename;
         if (imagefilename != null && !imagefilename.isEmpty()) {
-            icon = new ImageIcon("icons/" + imagefilename);
+
+            // 1. Construct the relative path string
+            String relativePath = "icons/" + imagefilename;
+
+            // 2. Resolve the relative path against the current working directory
+            Path absolutePath = Paths.get(relativePath).toAbsolutePath();
+
+            // 3. Print the absolute path
+            System.out.println("Expected Absolute Image Path: " + absolutePath.toString());
+
+            // 4. Create the ImageIcon using the absolute path
+            icon = new ImageIcon(absolutePath.toString());
         }
         updateSize();
 
@@ -228,7 +241,7 @@ public class Node extends JComponent implements Serializable {
                 updateSize();
                 //int text2Width = metrics.stringWidth(name);
             }
-            
+
             drawTextWithBackground(
                     g,
                     nodeName,
