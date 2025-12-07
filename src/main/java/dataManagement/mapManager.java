@@ -18,27 +18,18 @@ public class mapManager extends Thread {
 
     private Node[] nodes;
     private Link[] links;
-    private String id = "", name = "", descr = "", owner = "";
+    private String id = "", name = "", descr = "", owner = "", filename = "";
     private boolean alive = true;
     private nodeMaintainer pinger = null;
     private linkMaintainer snmperLink;
-    private char[] p;
 
-    public mapManager(String id, String name, String description, String owner, char[] p) {
+    public mapManager(String id, String name, String description, String owner, String filename) {
         super("mapManagerThread(" + id + ")");
         this.id = id;
         this.name = name;
         descr = description;
-        this.p = p;
         this.owner = owner;
-    }
-
-    public char[] getPass() {
-        return p;
-    }
-
-    public void setPass(char[] pass) {
-        p = pass;
+        this.filename = filename;
     }
 
     public String getID() {
@@ -56,7 +47,11 @@ public class mapManager extends Thread {
     public String getOwner() {
         return owner;
     }
-
+    
+    public String getFilename(){
+        return filename;
+    }
+    
     public void updateMap(mapData newmap) {
         
         

@@ -41,19 +41,19 @@ public class MapViewer extends javax.swing.JPanel {
     private void initComponents() {
 
         statusLabel = new javax.swing.JLabel();
-        jButton1 = new javax.swing.JButton();
+        jButtonSettings = new javax.swing.JButton();
         jScrollPane1 = new javax.swing.JScrollPane();
         lockMap = new javax.swing.JCheckBox();
 
         statusLabel.setText("Welcome to jnodesOne");
 
-        jButton1.setBackground(new java.awt.Color(0, 102, 255));
-        jButton1.setForeground(new java.awt.Color(255, 255, 255));
-        jButton1.setText("Settings");
-        jButton1.setEnabled(false);
-        jButton1.addActionListener(new java.awt.event.ActionListener() {
+        jButtonSettings.setBackground(new java.awt.Color(0, 102, 255));
+        jButtonSettings.setForeground(new java.awt.Color(255, 255, 255));
+        jButtonSettings.setText("Settings");
+        jButtonSettings.setEnabled(false);
+        jButtonSettings.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
-                jButton1ActionPerformed(evt);
+                jButtonSettingsActionPerformed(evt);
             }
         });
 
@@ -70,7 +70,7 @@ public class MapViewer extends javax.swing.JPanel {
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(lockMap)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                .addComponent(jButton1)
+                .addComponent(jButtonSettings)
                 .addContainerGap())
             .addComponent(jScrollPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 551, Short.MAX_VALUE)
         );
@@ -80,30 +80,21 @@ public class MapViewer extends javax.swing.JPanel {
                 .addContainerGap()
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(statusLabel)
-                    .addComponent(jButton1, javax.swing.GroupLayout.PREFERRED_SIZE, 19, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(jButtonSettings, javax.swing.GroupLayout.PREFERRED_SIZE, 19, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addComponent(lockMap))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(jScrollPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 276, Short.MAX_VALUE))
         );
     }// </editor-fold>//GEN-END:initComponents
 
-    private void jButton1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton1ActionPerformed
+    private void jButtonSettingsActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButtonSettingsActionPerformed
         // TODO add your handling code here:
-
-
-        if (new LoginPanel().createAndShowGUI()) {
-            statusLabel.setText("Registered as admin.You can edit map elements");
-            jButton1.setEnabled(false);
-            lockMap.setEnabled(true);
-            Main.authedAdmin=true;
-        }
-
-    }//GEN-LAST:event_jButton1ActionPerformed
+    }//GEN-LAST:event_jButtonSettingsActionPerformed
     public void updateMainAnim(mapData map) {
         p.updateMap(map);
     }
     // Variables declaration - do not modify//GEN-BEGIN:variables
-    private javax.swing.JButton jButton1;
+    private javax.swing.JButton jButtonSettings;
     private javax.swing.JScrollPane jScrollPane1;
     public static javax.swing.JCheckBox lockMap;
     public javax.swing.JLabel statusLabel;

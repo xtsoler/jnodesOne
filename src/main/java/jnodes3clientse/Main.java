@@ -1,8 +1,3 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
-
  /*
  * NewJFrame.java
  *
@@ -10,10 +5,8 @@
  */
 package jnodes3clientse;
 
-//import dataGenerator.snmpGetIfList;
 import java.awt.Container;
 import java.awt.Toolkit;
-import java.io.File;
 import java.io.IOException;
 import javax.swing.JDialog;
 import javax.swing.JFrame;
@@ -22,10 +15,6 @@ import message.*;
 import org.apache.commons.cli.*;
 import org.apache.commons.cli.help.HelpFormatter;
 
-/**
- *
- * @author Administrator
- */
 public class Main extends javax.swing.JFrame {
 
     public static MapViewer gp = new MapViewer();

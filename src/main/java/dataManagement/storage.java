@@ -17,7 +17,7 @@ import message.mapData;
  */
 public class storage {
 
-    public static dbase<mapManager> maplist = new dbase<mapManager>("mapBase");
+    public static dbase<mapManager> maplist = new dbase<>("mapBase");
 
     public static mapData getMapDataById(String mapId) {
         mapManager mp = maplist.getEntry(mapId);
@@ -35,7 +35,7 @@ public class storage {
     public static void updateMap(mapData map) {
         maplist.getEntry(map.getID()).updateMap(map);
         //tools.ByteArrayUtils.writeBytes2File(tools.ByteArrayUtils.getSerializedBytes(map), "tmp.mpd");
-        writeMapDataToJsonFile(map, "map.json");
+        writeMapDataToJsonFile(map, maplist.getEntry(map.getID()).getFilename());
     }
 
     public static void restartPollersforMap(mapData map) {
@@ -50,10 +50,10 @@ public class storage {
         maplist.deleteEntry(mapId);
     }
 
-    public static String addMap(String name, String descr, String owner, char[] pass) {
+    public static String addMap(String name, String descr, String owner, String filename) {
         mapManager m = null;
         String id = maplist.addEntry(m);
-        m = new mapManager(id, name, descr, owner, pass);
+        m = new mapManager(id, name, descr, owner, filename);
         m.updateMap(new mapData(id));
         m.start();
         maplist.put(id, m);
@@ -68,10 +68,9 @@ public class storage {
             //s = (message.mapData) tools.ByteArrayUtils.getObject(tools.ByteArrayUtils.getBytesFromFile("tmp.mpd"));
             s = loadMapDataFromJsonFile(filename);
             if (s != null) {
-                char[] p = {'d', 'e', 'm', 'o'};
                 mapManager m = null;
                 String id = maplist.addEntry(m);
-                m = new mapManager(id, "demo", "admin pass=demo", "admin", p);
+                m = new mapManager(id, "demo", "demo map description", "admin", filename);
                 mapData map1;
                 //s.debug();
                 map1 = new mapData(id);
@@ -84,12 +83,10 @@ public class storage {
                 new_id = id;
             } else {
                 tools.ModalMsg.display("Invalid or old versioned map file. Map file was cleared.");
-                char[] a = {'o', 'k'};
-                new_id = addMap("asd", "asd", "asd", a);
+                new_id = addMap("asd", "asd", "asd", filename);
             }
         } else {
-            char[] a = {'o', 'k'};
-            new_id = addMap("asd", "asd", "asd", a);
+            new_id = addMap("asd", "asd", "asd", filename);
         }
 
         return new_id;

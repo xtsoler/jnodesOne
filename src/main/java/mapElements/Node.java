@@ -2,6 +2,7 @@ package mapElements;
 
 import java.awt.*;
 import java.io.Serializable;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import javax.swing.ImageIcon;
@@ -25,7 +26,6 @@ public class Node extends JComponent implements Serializable {
     @Setter
     private boolean alive = false, newLink = false, highlighted = false;
     Font NodefontBold = new Font("LucidaSansDemiBold", Font.BOLD, 12);
-    //Font Nodefont = new Font("LucidaSansDemiBold", Font.PLAIN, 12);
     Font current = NodefontBold;
     private ImageIcon icon = null;
 
@@ -39,7 +39,8 @@ public class Node extends JComponent implements Serializable {
         this.nodeID = nodeID;
     }
 
-    public Node(String imagefilename, String nodeID, String whatName, String whatIp, Integer whatx, Integer whaty, Integer whatz, String whatcom, boolean isAlive) {
+    public Node(String imagefilename, String nodeID, String whatName, String whatIp,
+                Integer whatx, Integer whaty, Integer whatz, String whatcom, boolean isAlive) {
         this.nodeID = nodeID;
         z = whatz;
         this.alive = isAlive;
@@ -49,22 +50,78 @@ public class Node extends JComponent implements Serializable {
         ip = whatIp;
         community = whatcom;
         this.imagefilename = imagefilename;
-        if (imagefilename != null && !imagefilename.isEmpty()) {
 
-            // 1. Construct the relative path string
-            String relativePath = "icons/" + imagefilename;
+        // Load icon from icons folder or from app server conf/jnodesWeb
+        loadIcon();
 
-            // 2. Resolve the relative path against the current working directory
-            Path absolutePath = Paths.get(relativePath).toAbsolutePath();
-
-            // 3. Print the absolute path
-            System.out.println("Expected Absolute Image Path: " + absolutePath.toString());
-
-            // 4. Create the ImageIcon using the absolute path
-            icon = new ImageIcon(absolutePath.toString());
-        }
         updateSize();
+    }
 
+    private void loadIcon() {
+        icon = null;
+
+        if (imagefilename == null || imagefilename.isEmpty()) {
+            System.out.println("[Node] No image filename set for node: " + nodeName);
+            updateSize();
+            return;
+        }
+
+        try {
+            Path iconPath = resolveIconPath(imagefilename);
+
+            System.out.println("[Node] Expected Absolute Image Path: " + iconPath);
+
+            if (Files.exists(iconPath)) {
+                icon = new ImageIcon(iconPath.toString());
+            } else {
+                System.out.println("[Node] Icon file not found: " + iconPath);
+            }
+        } catch (Exception e) {
+            System.err.println("[Node] Failed to resolve/load icon for: " + imagefilename);
+            e.printStackTrace();
+        }
+
+        updateSize();
+    }
+
+    /**
+     * Resolve icon path:
+     * 1. ./icons/<imagefilename>
+     * 2. If ./icons does not exist and we're under Tomcat: $CATALINA_BASE/conf/jnodesWeb/icons/<imagefilename>
+     * 3. If under Jetty: $JETTY_BASE/conf/jnodesWeb/icons/<imagefilename>
+     */
+    private Path resolveIconPath(String imagefilename) {
+        // 1. Local "icons" folder
+        Path localIconsDir = Paths.get("icons");
+        if (Files.isDirectory(localIconsDir)) {
+            return localIconsDir.resolve(imagefilename).toAbsolutePath();
+        }
+
+        // 2. Tomcat: catalina.base/conf/jnodesWeb/icons
+        String catalinaBase = System.getProperty("catalina.base");
+        if (catalinaBase != null) {
+            Path tomcatIconsDir = Path.of(catalinaBase, "conf", "jnodesWeb", "icons");
+            if (Files.isDirectory(tomcatIconsDir)) {
+                return tomcatIconsDir.resolve(imagefilename).toAbsolutePath();
+            } else {
+                System.out.println("[Node] Tomcat icons dir does not exist: " + tomcatIconsDir);
+            }
+        }
+
+        // 3. Jetty: jetty.base/conf/jnodesWeb/icons
+        String jettyBase = System.getProperty("jetty.base");
+        if (jettyBase != null) {
+            Path jettyIconsDir = Path.of(jettyBase, "conf", "jnodesWeb", "icons");
+            if (Files.isDirectory(jettyIconsDir)) {
+                return jettyIconsDir.resolve(imagefilename).toAbsolutePath();
+            } else {
+                System.out.println("[Node] Jetty icons dir does not exist: " + jettyIconsDir);
+            }
+        }
+
+        // Fallback: local icons path even if folder isn't there (for debugging)
+        System.out.println("[Node] Falling back to local icons folder (may not exist).");
+        return localIconsDir.resolve(imagefilename).toAbsolutePath();
     }
 
     public void setX(Integer x) {
@@ -153,18 +210,8 @@ public class Node extends JComponent implements Serializable {
     }
 
     public void setImagefilename(String imagefilename) {
-        icon = null;
-        if (imagefilename != null && !imagefilename.isEmpty()) {
-            icon = new ImageIcon("icons/" + imagefilename);
-        }
         this.imagefilename = imagefilename;
-        if (icon != null) {
-            width = icon.getIconWidth();
-            height = icon.getIconHeight();
-        } else {
-            width = 16 + strwidth;
-            height = 22;
-        }
+        loadIcon();
     }
 
     public String getSnmpv3username() {
@@ -239,7 +286,6 @@ public class Node extends JComponent implements Serializable {
                 g.setColor(Color.blue);
                 current = NodefontBold;
                 updateSize();
-                //int text2Width = metrics.stringWidth(name);
             }
 
             drawTextWithBackground(
@@ -295,7 +341,6 @@ public class Node extends JComponent implements Serializable {
         int textHeight = fm.getHeight();
         int ascent = fm.getAscent();
 
-        // Padding around the text
         int paddingX = 4;
         int paddingY = 2;
 
@@ -304,14 +349,9 @@ public class Node extends JComponent implements Serializable {
         int bgWidth = textWidth + paddingX * 2;
         int bgHeight = textHeight + paddingY;
 
-        // Draw semi-transparent background
         g2.setColor(bgColor);
         g2.fillRoundRect(bgX, bgY, bgWidth, bgHeight, 6, 6);
 
-        // Draw border (optional)
-        //g2.setColor(new Color(0, 0, 0, 160));
-        //g2.drawRoundRect(bgX, bgY, bgWidth, bgHeight, 6, 6);
-        // Draw the actual text on the foreground
         g2.setColor(textColor);
         g2.drawString(text, x, y);
     }

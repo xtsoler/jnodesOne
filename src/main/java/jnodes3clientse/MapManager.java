@@ -126,15 +126,7 @@ public class MapManager extends javax.swing.JPanel {
     private void deleteMapButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_deleteMapButtonActionPerformed
         if (jTable1.getSelectedRow() > -1) {
             String selected = (String) jTable1.getModel().getValueAt(jTable1.getSelectedRow(), 0);
-            //select map to delete and auth on it..
-            //Main.con.sendData((byte) 71, selected.getBytes());
-            if (new LoginPanel().createAndShowGUI()) {
-                //Main.con.sendData((byte) 17, selected.getBytes());
-                statusLabel.setText("Map deletion successfull.");
-            } else {
-                tools.ModalMsg.display("Map deletion failed.");
-            }
-
+            //to do, deletion
         } else {
             tools.ModalMsg.display("No map selected.");
         }
