@@ -47,7 +47,7 @@ public class nodeMaintainer implements Runnable {
         Thread myThread = Thread.currentThread();
         //little delay at the boot to allow all loading to cool down
         try {
-            Thread.sleep(3000);
+            Thread.sleep(2000);
         } catch (InterruptedException e) {
         }
 
@@ -75,7 +75,7 @@ public class nodeMaintainer implements Runnable {
             //cnt++;
 
             try {
-                Thread.sleep(9000);
+                Thread.sleep(4000);
             } catch (InterruptedException e) {
             }
             cnt++;
@@ -108,7 +108,7 @@ public class nodeMaintainer implements Runnable {
         if (snmplist != null) {
             for (int i = 0; i < snmplist.length; i++) {
                 try {
-                    Thread.sleep(5000);
+                    Thread.sleep(3000);
                 } catch (InterruptedException e) {
                 }
                 //interface list of each node

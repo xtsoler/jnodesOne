@@ -64,6 +64,36 @@ public class NodeInfo extends javax.swing.JPanel {
         populateList(node);
     }
 
+    /**
+     * Decide whether this node should be queried with SNMPv1. Rule: if a
+     * community is present -> SNMPv1, else SNMPv3.
+     */
+    private boolean useSnmpV1(Node n) {
+        return n != null
+                && n.getCommunity() != null
+                && !n.getCommunity().isEmpty();
+    }
+
+    /**
+     * Minimal checks before we attempt SNMP. (Keeps the existing "do nothing if
+     * not configured" behavior.)
+     */
+    private boolean hasValidIp(Node n) {
+        return n != null
+                && n.getIp() != null
+                && !n.getIp().isEmpty();
+    }
+
+    /**
+     * SNMPv3 config required (matches your current checks).
+     */
+    private boolean hasValidV3(Node n) {
+        return n != null
+                && n.getSnmpv3username() != null && !n.getSnmpv3username().isEmpty()
+                && n.getSnmpv3auth() != null && !n.getSnmpv3auth().isEmpty()
+                && n.getSnmpv3priv() != null && !n.getSnmpv3priv().isEmpty();
+    }
+
     private void populateList(Node node) {
         ifModel.clear();
         ipField.setText(node.getIp());
@@ -296,21 +326,52 @@ public class NodeInfo extends javax.swing.JPanel {
 
     private void jButton1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton1ActionPerformed
         // TODO add your handling code here:
-        if (theNode.getIp() != null && !theNode.getIp().isEmpty()
-                && theNode.getSnmpv3username() != null && !theNode.getSnmpv3username().isEmpty()
-                && theNode.getSnmpv3auth() != null && !theNode.getSnmpv3auth().isEmpty()
-                && theNode.getSnmpv3priv() != null && !theNode.getSnmpv3priv().isEmpty()) {
-            System.out.println("[SNMP INFO:] checking interfaces of node " + theNode.getNodeName() + " - " + theNode.getID());
-            snmpGetIfList snmplist = new snmpGetIfList(theNode.getIp(), theNode.getSnmpv3username(), theNode.getSnmpv3auth(), theNode.getSnmpv3priv(), theNode.getSnmpv3encr());
+        if (!hasValidIp(theNode)) {
+            return; // No IP -> cannot query
+        }
+
+        // --- SNMPv1 path: node has community ---
+        if (useSnmpV1(theNode)) {
+            System.out.println("[SNMP INFO:] checking interfaces (SNMPv1) of node "
+                    + theNode.getNodeName() + " - " + theNode.getID());
+
+            // NOTE: requires snmpGetIfList SNMPv1 constructor (see below)
+            snmpGetIfList snmplist = new snmpGetIfList(theNode.getIp(), theNode.getCommunity().trim());
 
             String[] tmp = snmplist.getList();
             NodeInterface[] nodeIfList = new NodeInterface[tmp.length];
             String[] index = snmplist.getIndex();
+
             for (int j = 0; j < tmp.length; j++) {
-                //System.out.print(index[j]);
-                //System.out.println(" " + tmp[j]);
                 nodeIfList[j] = new NodeInterface(tmp[j], tmp[j] + "(" + index[j] + ")", index[j]);
             }
+
+            theNode.setIfList(nodeIfList);
+            populateList(theNode);
+            return;
+        }
+
+        // --- SNMPv3 path: existing behavior ---
+        if (hasValidV3(theNode)) {
+            System.out.println("[SNMP INFO:] checking interfaces (SNMPv3) of node "
+                    + theNode.getNodeName() + " - " + theNode.getID());
+
+            snmpGetIfList snmplist = new snmpGetIfList(
+                    theNode.getIp(),
+                    theNode.getSnmpv3username(),
+                    theNode.getSnmpv3auth(),
+                    theNode.getSnmpv3priv(),
+                    theNode.getSnmpv3encr()
+            );
+
+            String[] tmp = snmplist.getList();
+            NodeInterface[] nodeIfList = new NodeInterface[tmp.length];
+            String[] index = snmplist.getIndex();
+
+            for (int j = 0; j < tmp.length; j++) {
+                nodeIfList[j] = new NodeInterface(tmp[j], tmp[j] + "(" + index[j] + ")", index[j]);
+            }
+
             theNode.setIfList(nodeIfList);
             populateList(theNode);
         }
@@ -318,12 +379,31 @@ public class NodeInfo extends javax.swing.JPanel {
 
     private void jButton2ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton2ActionPerformed
         // SNMP query for connected devices (MAC table / neighbors)
-        if (theNode.getIp() != null && !theNode.getIp().isEmpty()
-                && theNode.getSnmpv3username() != null && !theNode.getSnmpv3username().isEmpty()
-                && theNode.getSnmpv3auth() != null && !theNode.getSnmpv3auth().isEmpty()
-                && theNode.getSnmpv3priv() != null && !theNode.getSnmpv3priv().isEmpty()) {
+        if (!hasValidIp(theNode)) {
+            return;
+        }
 
-            System.out.println("[SNMP INFO:] checking connected devices of node "
+        // --- SNMPv1 path ---
+        if (useSnmpV1(theNode)) {
+            System.out.println("[SNMP INFO:] checking connected devices (SNMPv1) of node "
+                    + theNode.getNodeName() + " - " + theNode.getID());
+
+            // NOTE: requires snmpGetMACList SNMPv1 constructor (similar pattern)
+            snmpGetMACList snmplist = new snmpGetMACList(theNode.getIp(), theNode.getCommunity().trim());
+
+            java.util.List<snmpGetMACList.NeighborEntry> neighbors = snmplist.getNeighbors();
+
+            if (neighbors == null || neighbors.isEmpty()) {
+                connectedTableModel.setNeighbors(null);
+            } else {
+                connectedTableModel.setNeighbors(neighbors);
+            }
+            return;
+        }
+
+        // --- SNMPv3 path: existing behavior ---
+        if (hasValidV3(theNode)) {
+            System.out.println("[SNMP INFO:] checking connected devices (SNMPv3) of node "
                     + theNode.getNodeName() + " - " + theNode.getID());
 
             snmpGetMACList snmplist = new snmpGetMACList(
@@ -336,7 +416,6 @@ public class NodeInfo extends javax.swing.JPanel {
 
             java.util.List<snmpGetMACList.NeighborEntry> neighbors = snmplist.getNeighbors();
 
-            // If null/empty: simply clear the table
             if (neighbors == null || neighbors.isEmpty()) {
                 connectedTableModel.setNeighbors(null);
             } else {
@@ -347,13 +426,32 @@ public class NodeInfo extends javax.swing.JPanel {
 
     private void jButton3ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton3ActionPerformed
         // TODO add your handling code here:
-// SNMP query for ARP table
-        if (theNode.getIp() != null && !theNode.getIp().isEmpty()
-                && theNode.getSnmpv3username() != null && !theNode.getSnmpv3username().isEmpty()
-                && theNode.getSnmpv3auth() != null && !theNode.getSnmpv3auth().isEmpty()
-                && theNode.getSnmpv3priv() != null && !theNode.getSnmpv3priv().isEmpty()) {
+        // SNMP query for ARP table
+        if (!hasValidIp(theNode)) {
+            return;
+        }
 
-            System.out.println("[SNMP INFO:] checking ARP table of node "
+        // --- SNMPv1 path ---
+        if (useSnmpV1(theNode)) {
+            System.out.println("[SNMP INFO:] checking ARP table (SNMPv1) of node "
+                    + theNode.getNodeName() + " - " + theNode.getID());
+
+            // NOTE: requires snmpGetARPList SNMPv1 constructor (similar pattern)
+            snmpGetARPList snmplist = new snmpGetARPList(theNode.getIp(), theNode.getCommunity().trim());
+
+            java.util.List<snmpGetARPList.ArpEntry> arpEntries = snmplist.getNeighbors();
+
+            if (arpEntries == null || arpEntries.isEmpty()) {
+                arpTableModel.setEntries(null);
+            } else {
+                arpTableModel.setEntries(arpEntries);
+            }
+            return;
+        }
+
+        // --- SNMPv3 path: existing behavior ---
+        if (hasValidV3(theNode)) {
+            System.out.println("[SNMP INFO:] checking ARP table (SNMPv3) of node "
                     + theNode.getNodeName() + " - " + theNode.getID());
 
             snmpGetARPList snmplist = new snmpGetARPList(

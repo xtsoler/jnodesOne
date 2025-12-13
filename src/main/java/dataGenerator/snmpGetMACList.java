@@ -16,6 +16,7 @@ import org.snmp4j.Snmp;
 import org.snmp4j.Target;
 import org.snmp4j.TransportMapping;
 import org.snmp4j.UserTarget;
+import org.snmp4j.CommunityTarget;
 import org.snmp4j.mp.MPv3;
 import org.snmp4j.mp.SnmpConstants;
 import org.snmp4j.security.AuthSHA;
@@ -51,7 +52,10 @@ public class snmpGetMACList {
     String[] nameList = {};
     String[] indexList = {};
 
-    String thehost, theusername, theauthPass, theprivPass, theencr;
+    // --- Inputs used to decide SNMP mode ---
+    // If "thecommunity" is non-empty, we will use SNMPv1 community mode.
+    // Otherwise, we will use SNMPv3 USM mode (username/auth/priv).
+    String thehost, thecommunity, theusername, theauthPass, theprivPass, theencr;
 
     private List<NeighborEntry> neighborList = new ArrayList<>();
 
@@ -85,17 +89,51 @@ public class snmpGetMACList {
         }
     }
 
+    /**
+     * Existing constructor: SNMPv3 mode.
+     * If you pass an empty username, authPass, etc, it will likely fail at runtime.
+     */
     public snmpGetMACList(String host, String username, String authPass, String privPass, String encr) {
         thehost = host;
         theusername = username;
         theauthPass = authPass;
         theprivPass = privPass;
         theencr = encr;
+
+        // Ensure community is null/empty so update() chooses SNMPv3 path
+        thecommunity = null;
+
+        update();
+    }
+
+    /**
+     * New constructor: SNMPv1 mode (community string).
+     * This is what you want when the node has "community".
+     */
+    public snmpGetMACList(String host, String community) {
+        thehost = host;
+        thecommunity = community;
+
+        // Ensure v3 fields are empty so update() chooses SNMPv1 path
+        theusername = null;
+        theauthPass = null;
+        theprivPass = null;
+        theencr = null;
+
         update();
     }
 
     private void update() {
-        snmpGetMacNeighborsV3("udp:" + thehost + "/161", theusername, theauthPass, theprivPass, theencr);
+        // Build SNMP4J address format
+        String addr = "udp:" + thehost + "/161";
+
+        // --- Decision: SNMPv1 if community exists, else SNMPv3 ---
+        // NOTE: You asked: "do snmpv1 instead of v3 when the node has community"
+        if (thecommunity != null && !thecommunity.trim().isEmpty()) {
+            snmpGetMacNeighborsV1(addr, thecommunity.trim());
+        } else {
+            snmpGetMacNeighborsV3(addr, theusername, theauthPass, theprivPass, theencr);
+        }
     }
 
     /**
@@ -117,11 +155,15 @@ public class snmpGetMACList {
         return dataList;
     }
 
-    static List<TreeEvent> walk(TreeUtils treeUtils, Target<Address> targetV3, OID oid) {
+    /**
+     * Common "walk" helper used by both SNMPv1 and SNMPv3.
+     * It uses TreeUtils.getSubtree() and collects the resulting TreeEvents.
+     */
+    static List<TreeEvent> walk(TreeUtils treeUtils, Target<Address> target, OID oid) {
         List<TreeEvent> walkResult = new LinkedList<>();
         InternalTreeListener treeListener = new InternalTreeListener(walkResult);
 
-        treeUtils.getSubtree(targetV3, oid, null, treeListener);
+        treeUtils.getSubtree(target, oid, null, treeListener);
         try {
             treeListener.waitForResult();
         } catch (InterruptedException e) {
@@ -132,6 +174,7 @@ public class snmpGetMACList {
 
     /**
      * New version: builds MAC neighbor list using BRIDGE-MIB and IF-MIB.
+     * SNMPv3 variant (your existing logic).
      */
     public void snmpGetMacNeighborsV3(String address, String username, String authPass, String privPass, String encr) {
         Snmp snmp = null;
@@ -170,127 +213,8 @@ public class snmpGetMACList {
             userTarget.setTimeout(3000);
             userTarget.setVersion(SnmpConstants.version3);
 
-            // --- 1) bridgePort -> ifIndex (dot1dBasePortIfIndex) ---
-            Map<Integer, Integer> bridgePortToIfIndex = new HashMap<>();
-            OID basePortIfIndexOid = new OID(OID_DOT1D_BASE_PORT_IFIDX);
-
-            for (TreeEvent event : walk(treeUtils, userTarget, basePortIfIndexOid)) {
-                if (event == null || event.isError()) continue;
-                if (event.getVariableBindings() == null) continue;
-
-                for (VariableBinding vb : event.getVariableBindings()) {
-                    if (vb == null) continue;
-                    String suffix = vb.getOid().getSuffix(basePortIfIndexOid).toString();
-                    try {
-                        int bridgePort = Integer.parseInt(suffix);
-                        int ifIndex = vb.getVariable().toInt();
-                        bridgePortToIfIndex.put(bridgePort, ifIndex);
-                    } catch (NumberFormatException ignored) {
-                    }
-                }
-            }
-
-            // --- 2) ifIndex -> ifName (ifName) ---
-            Map<Integer, String> ifIndexToName = new HashMap<>();
-            OID ifNameOid = new OID(OID_IF_NAME);
-
-            for (TreeEvent event : walk(treeUtils, userTarget, ifNameOid)) {
-                if (event == null || event.isError()) continue;
-                if (event.getVariableBindings() == null) continue;
-
-                for (VariableBinding vb : event.getVariableBindings()) {
-                    if (vb == null) continue;
-                    String suffix = vb.getOid().getSuffix(ifNameOid).toString();
-                    try {
-                        int ifIndex = Integer.parseInt(suffix);
-                        String ifName = vb.getVariable().toString();
-                        ifIndexToName.put(ifIndex, ifName);
-                    } catch (NumberFormatException ignored) {
-                    }
-                }
-            }
-
-            // --- 3) MAC table: MAC, bridgePort, status ---
-            Map<String, String> macByKey = new HashMap<>();
-            Map<String, Integer> portByKey = new HashMap<>();
-            Map<String, Integer> statusByKey = new HashMap<>();
-
-            OID fdbAddrOid = new OID(OID_DOT1D_TP_FDB_ADDRESS);
-            OID fdbPortOid = new OID(OID_DOT1D_TP_FDB_PORT);
-            OID fdbStatusOid = new OID(OID_DOT1D_TP_FDB_STATUS);
-
-            // 3a) MAC addresses
-            for (TreeEvent event : walk(treeUtils, userTarget, fdbAddrOid)) {
-                if (event == null || event.isError()) continue;
-                if (event.getVariableBindings() == null) continue;
-
-                for (VariableBinding vb : event.getVariableBindings()) {
-                    if (vb == null) continue;
-                    String key = vb.getOid().getSuffix(fdbAddrOid).toString();
-                    String macStr = octetStringToMac((OctetString) vb.getVariable());
-                    macByKey.put(key, macStr);
-                }
-            }
-
-            // 3b) bridge ports
-            for (TreeEvent event : walk(treeUtils, userTarget, fdbPortOid)) {
-                if (event == null || event.isError()) continue;
-                if (event.getVariableBindings() == null) continue;
-
-                for (VariableBinding vb : event.getVariableBindings()) {
-                    if (vb == null) continue;
-                    String key = vb.getOid().getSuffix(fdbPortOid).toString();
-                    int port = vb.getVariable().toInt();
-                    portByKey.put(key, port);
-                }
-            }
-
-            // 3c) FDB status
-            for (TreeEvent event : walk(treeUtils, userTarget, fdbStatusOid)) {
-                if (event == null || event.isError()) continue;
-                if (event.getVariableBindings() == null) continue;
-
-                for (VariableBinding vb : event.getVariableBindings()) {
-                    if (vb == null) continue;
-                    String key = vb.getOid().getSuffix(fdbStatusOid).toString();
-                    int status = vb.getVariable().toInt();
-                    statusByKey.put(key, status);
-                }
-            }
-
-            // --- 4) Build NeighborEntry list ---
-            List<NeighborEntry> result = new ArrayList<>();
-
-            for (Map.Entry<String, String> e : macByKey.entrySet()) {
-                String key = e.getKey();
-                String mac = e.getValue();
-
-                Integer bridgePortObj = portByKey.get(key);
-                if (bridgePortObj == null) {
-                    // incomplete row, skip
-                    continue;
-                }
-                int bridgePort = bridgePortObj;
-
-                int fdbStatus = statusByKey.getOrDefault(key, 0);
-                int ifIndex = bridgePortToIfIndex.getOrDefault(bridgePort, -1);
-                String ifName = ifIndexToName.get(ifIndex);
-
-                NeighborEntry entry = new NeighborEntry(mac, bridgePort, ifIndex, ifName, fdbStatus);
-                result.add(entry);
-            }
-
-            neighborList = result;
-
-            // --- keep old arrays loosely in sync for compatibility ---
-            ArrayList<String> macNames = new ArrayList<>();
-            ArrayList<String> idxStrings = new ArrayList<>();
-            for (NeighborEntry n : neighborList) {
-                macNames.add(n.mac);
-                idxStrings.add(Integer.toString(n.ifIndex));
-            }
-            nameList = macNames.toArray(new String[0]);
-            indexList = idxStrings.toArray(new String[0]);
+            // Same core logic for building neighborList
+            buildNeighborList(treeUtils, userTarget);
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -303,6 +227,184 @@ public class snmpGetMACList {
                 }
             }
         }
+    }
+
+    /**
+     * SNMPv1 community-based MAC-table walk.
+     *
+     * - No USM / user / auth / priv.
+     * - Uses CommunityTarget and SNMP version1.
+     * - Fetches the same BRIDGE-MIB/IF-MIB tables.
+     */
+    public void snmpGetMacNeighborsV1(String address, String community) {
+        Snmp snmp = null;
+        try {
+            TransportMapping<UdpAddress> transport = new DefaultUdpTransportMapping();
+            snmp = new Snmp(transport);
+            transport.listen();
+
+            // TreeUtils works fine for community targets as well
+            TreeUtils treeUtils = new TreeUtils(snmp, new DefaultPDUFactory());
+
+            // Community Target (SNMPv1)
+            CommunityTarget<Address> target = new CommunityTarget<>();
+            target.setAddress(GenericAddress.parse(address)); // e.g., "udp:127.0.0.1/161"
+            target.setCommunity(new OctetString(community));
+            target.setRetries(3);
+            target.setTimeout(3000);
+
+            // You explicitly asked for SNMPv1
+            target.setVersion(SnmpConstants.version1);
+
+            // Same core logic for building neighborList
+            buildNeighborList(treeUtils, target);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            if (snmp != null) {
+                try {
+                    snmp.close();
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+            }
+        }
+    }
+
+    /**
+     * Shared logic that actually fetches:
+     *  1) bridgePort -> ifIndex (dot1dBasePortIfIndex)
+     *  2) ifIndex -> ifName     (IF-MIB::ifName)
+     *  3) MAC table rows        (dot1dTpFdbAddress/Port/Status)
+     *
+     * This is extracted so SNMPv1 and SNMPv3 call the same code with different Target types.
+     */
+    private void buildNeighborList(TreeUtils treeUtils, Target<Address> target) {
+
+        // --- 1) bridgePort -> ifIndex (dot1dBasePortIfIndex) ---
+        Map<Integer, Integer> bridgePortToIfIndex = new HashMap<>();
+        OID basePortIfIndexOid = new OID(OID_DOT1D_BASE_PORT_IFIDX);
+
+        for (TreeEvent event : walk(treeUtils, target, basePortIfIndexOid)) {
+            if (event == null || event.isError()) continue;
+            if (event.getVariableBindings() == null) continue;
+
+            for (VariableBinding vb : event.getVariableBindings()) {
+                if (vb == null) continue;
+                String suffix = vb.getOid().getSuffix(basePortIfIndexOid).toString();
+                try {
+                    int bridgePort = Integer.parseInt(suffix);
+                    int ifIndex = vb.getVariable().toInt();
+                    bridgePortToIfIndex.put(bridgePort, ifIndex);
+                } catch (NumberFormatException ignored) {
+                }
+            }
+        }
+
+        // --- 2) ifIndex -> ifName (ifName) ---
+        Map<Integer, String> ifIndexToName = new HashMap<>();
+        OID ifNameOid = new OID(OID_IF_NAME);
+
+        for (TreeEvent event : walk(treeUtils, target, ifNameOid)) {
+            if (event == null || event.isError()) continue;
+            if (event.getVariableBindings() == null) continue;
+
+            for (VariableBinding vb : event.getVariableBindings()) {
+                if (vb == null) continue;
+                String suffix = vb.getOid().getSuffix(ifNameOid).toString();
+                try {
+                    int ifIndex = Integer.parseInt(suffix);
+                    String ifName = vb.getVariable().toString();
+                    ifIndexToName.put(ifIndex, ifName);
+                } catch (NumberFormatException ignored) {
+                }
+            }
+        }
+
+        // --- 3) MAC table: MAC, bridgePort, status ---
+        Map<String, String> macByKey = new HashMap<>();
+        Map<String, Integer> portByKey = new HashMap<>();
+        Map<String, Integer> statusByKey = new HashMap<>();
+
+        OID fdbAddrOid = new OID(OID_DOT1D_TP_FDB_ADDRESS);
+        OID fdbPortOid = new OID(OID_DOT1D_TP_FDB_PORT);
+        OID fdbStatusOid = new OID(OID_DOT1D_TP_FDB_STATUS);
+
+        // 3a) MAC addresses
+        for (TreeEvent event : walk(treeUtils, target, fdbAddrOid)) {
+            if (event == null || event.isError()) continue;
+            if (event.getVariableBindings() == null) continue;
+
+            for (VariableBinding vb : event.getVariableBindings()) {
+                if (vb == null) continue;
+                String key = vb.getOid().getSuffix(fdbAddrOid).toString();
+
+                // dot1dTpFdbAddress is an OCTET STRING (6 bytes)
+                String macStr = octetStringToMac((OctetString) vb.getVariable());
+                macByKey.put(key, macStr);
+            }
+        }
+
+        // 3b) bridge ports
+        for (TreeEvent event : walk(treeUtils, target, fdbPortOid)) {
+            if (event == null || event.isError()) continue;
+            if (event.getVariableBindings() == null) continue;
+
+            for (VariableBinding vb : event.getVariableBindings()) {
+                if (vb == null) continue;
+                String key = vb.getOid().getSuffix(fdbPortOid).toString();
+                int port = vb.getVariable().toInt();
+                portByKey.put(key, port);
+            }
+        }
+
+        // 3c) FDB status
+        for (TreeEvent event : walk(treeUtils, target, fdbStatusOid)) {
+            if (event == null || event.isError()) continue;
+            if (event.getVariableBindings() == null) continue;
+
+            for (VariableBinding vb : event.getVariableBindings()) {
+                if (vb == null) continue;
+                String key = vb.getOid().getSuffix(fdbStatusOid).toString();
+                int status = vb.getVariable().toInt();
+                statusByKey.put(key, status);
+            }
+        }
+
+        // --- 4) Build NeighborEntry list ---
+        List<NeighborEntry> result = new ArrayList<>();
+
+        for (Map.Entry<String, String> e : macByKey.entrySet()) {
+            String key = e.getKey();
+            String mac = e.getValue();
+
+            Integer bridgePortObj = portByKey.get(key);
+            if (bridgePortObj == null) {
+                // incomplete row, skip
+                continue;
+            }
+            int bridgePort = bridgePortObj;
+
+            int fdbStatus = statusByKey.getOrDefault(key, 0);
+            int ifIndex = bridgePortToIfIndex.getOrDefault(bridgePort, -1);
+            String ifName = ifIndexToName.get(ifIndex);
+
+            NeighborEntry entry = new NeighborEntry(mac, bridgePort, ifIndex, ifName, fdbStatus);
+            result.add(entry);
+        }
+
+        neighborList = result;
+
+        // --- keep old arrays loosely in sync for compatibility ---
+        ArrayList<String> macNames = new ArrayList<>();
+        ArrayList<String> idxStrings = new ArrayList<>();
+        for (NeighborEntry n : neighborList) {
+            macNames.add(n.mac);
+            idxStrings.add(Integer.toString(n.ifIndex));
+        }
+        nameList = macNames.toArray(new String[0]);
+        indexList = idxStrings.toArray(new String[0]);
     }
 
     /**

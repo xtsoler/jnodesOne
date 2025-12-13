@@ -16,6 +16,7 @@ import org.snmp4j.Snmp;
 import org.snmp4j.Target;
 import org.snmp4j.TransportMapping;
 import org.snmp4j.UserTarget;
+import org.snmp4j.CommunityTarget;                 // <-- ADDED for SNMPv1
 import org.snmp4j.mp.MPv3;
 import org.snmp4j.mp.SnmpConstants;
 import org.snmp4j.security.AuthSHA;
@@ -47,11 +48,19 @@ public class snmpGetARPList {
     private static final String OID_IP_NET_TO_MEDIA_TYPE      = "1.3.6.1.2.1.4.22.1.4";
     private static final String OID_IF_NAME                   = "1.3.6.1.2.1.31.1.1.1.1";
 
+    // --- ADDED ---
+    // SNMPv1-friendly interface label OID (MIB-II ifDescr, generally available on v1 agents)
+    private static final String OID_IF_DESCR                  = "1.3.6.1.2.1.2.2.1.2";
+
     // Old fields kept only for backward compatibility (now derived from arpList)
     String[] nameList = {};
     String[] indexList = {};
 
+    // --- Existing v3 fields ---
     String thehost, theusername, theauthPass, theprivPass, theencr;
+
+    // --- ADDED v1 field ---
+    String thecommunity; // when set, we use SNMPv1 instead of v3
 
     private List<ArpEntry> arpList = new ArrayList<>();
 
@@ -85,17 +94,49 @@ public class snmpGetARPList {
         }
     }
 
+    /**
+     * Existing SNMPv3 constructor (unchanged behavior).
+     */
     public snmpGetARPList(String host, String username, String authPass, String privPass, String encr) {
         thehost = host;
         theusername = username;
         theauthPass = authPass;
         theprivPass = privPass;
         theencr = encr;
+
+        // IMPORTANT: keep community null so update() selects v3 path
+        thecommunity = null;
+
+        update();
+    }
+
+    /**
+     * ADDED: SNMPv1 constructor.
+     * If you pass a community, update() will use SNMPv1 queries.
+     */
+    public snmpGetARPList(String host, String community) {
+        thehost = host;
+        thecommunity = community;
+
+        // v3 credentials not used in v1 mode (left null intentionally)
+        theusername = null;
+        theauthPass = null;
+        theprivPass = null;
+        theencr = null;
+
         update();
     }
 
     private void update() {
-        snmpGetArpTableV3("udp:" + thehost + "/161", theusername, theauthPass, theprivPass, theencr);
+        // Decide protocol based on whether community is set.
+        // This matches your “use v1 when the node has community” requirement.
+        if (thecommunity != null && !thecommunity.isEmpty()) {
+            // SNMPv1 mode
+            snmpGetArpTableV1("udp:" + thehost + "/161", thecommunity);
+        } else {
+            // SNMPv3 mode (original behavior)
+            snmpGetArpTableV3("udp:" + thehost + "/161", theusername, theauthPass, theprivPass, theencr);
+        }
     }
 
     /**
@@ -191,101 +232,7 @@ public class snmpGetARPList {
             }
 
             // --- 2) ARP table (ipNetToMediaTable) ---
-            Map<String, Integer> ifIndexByKey = new HashMap<>();
-            Map<String, String> macByKey = new HashMap<>();
-            Map<String, String> ipByKey = new HashMap<>();
-            Map<String, Integer> typeByKey = new HashMap<>();
-
-            OID ipNetToMediaIfIndexOid  = new OID(OID_IP_NET_TO_MEDIA_IFINDEX);
-            OID ipNetToMediaPhysOid     = new OID(OID_IP_NET_TO_MEDIA_PHYSADDR);
-            OID ipNetToMediaNetAddrOid  = new OID(OID_IP_NET_TO_MEDIA_NETADDR);
-            OID ipNetToMediaTypeOid     = new OID(OID_IP_NET_TO_MEDIA_TYPE);
-
-            // 2a) ipNetToMediaIfIndex
-            for (TreeEvent event : walk(treeUtils, userTarget, ipNetToMediaIfIndexOid)) {
-                if (event == null || event.isError()) continue;
-                if (event.getVariableBindings() == null) continue;
-
-                for (VariableBinding vb : event.getVariableBindings()) {
-                    if (vb == null) continue;
-                    String key = vb.getOid().getSuffix(ipNetToMediaIfIndexOid).toString();
-                    int ifIndex = vb.getVariable().toInt();
-                    ifIndexByKey.put(key, ifIndex);
-                }
-            }
-
-            // 2b) ipNetToMediaPhysAddress (MAC)
-            for (TreeEvent event : walk(treeUtils, userTarget, ipNetToMediaPhysOid)) {
-                if (event == null || event.isError()) continue;
-                if (event.getVariableBindings() == null) continue;
-
-                for (VariableBinding vb : event.getVariableBindings()) {
-                    if (vb == null) continue;
-                    String key = vb.getOid().getSuffix(ipNetToMediaPhysOid).toString();
-                    String macStr = octetStringToMac((OctetString) vb.getVariable());
-                    macByKey.put(key, macStr);
-                }
-            }
-
-            // 2c) ipNetToMediaNetAddress (IP)
-            for (TreeEvent event : walk(treeUtils, userTarget, ipNetToMediaNetAddrOid)) {
-                if (event == null || event.isError()) continue;
-                if (event.getVariableBindings() == null) continue;
-
-                for (VariableBinding vb : event.getVariableBindings()) {
-                    if (vb == null) continue;
-                    String key = vb.getOid().getSuffix(ipNetToMediaNetAddrOid).toString();
-                    String ipStr = vb.getVariable().toString();  // IpAddress -> "x.x.x.x"
-                    ipByKey.put(key, ipStr);
-                }
-            }
-
-            // 2d) ipNetToMediaType
-            for (TreeEvent event : walk(treeUtils, userTarget, ipNetToMediaTypeOid)) {
-                if (event == null || event.isError()) continue;
-                if (event.getVariableBindings() == null) continue;
-
-                for (VariableBinding vb : event.getVariableBindings()) {
-                    if (vb == null) continue;
-                    String key = vb.getOid().getSuffix(ipNetToMediaTypeOid).toString();
-                    int type = vb.getVariable().toInt();
-                    typeByKey.put(key, type);
-                }
-            }
-
-            // --- 3) Build ArpEntry list ---
-            List<ArpEntry> result = new ArrayList<>();
-
-            for (Map.Entry<String, String> e : ipByKey.entrySet()) {
-                String key = e.getKey();
-                String ip = e.getValue();
-
-                // IfIndex is required to know interface; if missing, skip
-                Integer ifIndexObj = ifIndexByKey.get(key);
-                if (ifIndexObj == null) {
-                    continue;
-                }
-                int ifIndex = ifIndexObj;
-
-                String mac = macByKey.get(key);  // may be null if incomplete
-                int type = typeByKey.getOrDefault(key, 0);
-                String ifName = ifIndexToName.get(ifIndex);
-
-                ArpEntry entry = new ArpEntry(ip, mac, ifIndex, ifName, type);
-                result.add(entry);
-            }
-
-            arpList = result;
-
-            // --- keep old arrays loosely in sync for compatibility ---
-            ArrayList<String> ipNames = new ArrayList<>();
-            ArrayList<String> idxStrings = new ArrayList<>();
-            for (ArpEntry n : arpList) {
-                ipNames.add(n.ip);
-                idxStrings.add(Integer.toString(n.ifIndex));
-            }
-            nameList = ipNames.toArray(new String[0]);
-            indexList = idxStrings.toArray(new String[0]);
+            buildArpList(treeUtils, userTarget, ifIndexToName);
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -298,6 +245,182 @@ public class snmpGetARPList {
                 }
             }
         }
+    }
+
+    /**
+     * ADDED: SNMPv1 version of the same ARP-table fetch.
+     *
+     * Note:
+     * - Many SNMPv1 agents do NOT implement IF-MIB::ifName (ifXTable), so we use ifDescr (MIB-II).
+     * - ARP table itself (ipNetToMediaTable) is in MIB-II and is commonly available in v1.
+     */
+    public void snmpGetArpTableV1(String address, String community) {
+        Snmp snmp = null;
+        try {
+            TransportMapping<UdpAddress> transport = new DefaultUdpTransportMapping();
+            snmp = new Snmp(transport);
+            transport.listen();
+
+            // --- Target & TreeUtils ---
+            TreeUtils treeUtils = new TreeUtils(snmp, new DefaultPDUFactory());
+
+            CommunityTarget<Address> target = new CommunityTarget<>();
+            target.setAddress(GenericAddress.parse(address));
+            target.setCommunity(new OctetString(community));
+            target.setRetries(3);
+            target.setTimeout(3000);
+            target.setVersion(SnmpConstants.version1);
+
+            // --- 1) ifIndex -> ifDescr (MIB-II) ---
+            // We store it into the same map variable name "ifIndexToName" to reuse the common builder.
+            Map<Integer, String> ifIndexToName = new HashMap<>();
+            OID ifDescrOid = new OID(OID_IF_DESCR);
+
+            for (TreeEvent event : walk(treeUtils, target, ifDescrOid)) {
+                if (event == null || event.isError()) continue;
+                if (event.getVariableBindings() == null) continue;
+
+                for (VariableBinding vb : event.getVariableBindings()) {
+                    if (vb == null) continue;
+                    String suffix = vb.getOid().getSuffix(ifDescrOid).toString();
+                    try {
+                        int ifIndex = Integer.parseInt(suffix);
+                        String ifDescr = vb.getVariable().toString();
+                        ifIndexToName.put(ifIndex, ifDescr);
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+            }
+
+            // --- 2) ARP table (ipNetToMediaTable) ---
+            buildArpList(treeUtils, target, ifIndexToName);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            if (snmp != null) {
+                try {
+                    snmp.close();
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+            }
+        }
+    }
+
+    /**
+     * ADDED: Shared ARP-table building logic used by both SNMPv3 and SNMPv1.
+     *
+     * Why:
+     * - Your existing code duplicated the ARP-table walk and entry creation.
+     * - This keeps behavior identical while allowing different Targets (v1 vs v3).
+     */
+    private void buildArpList(TreeUtils treeUtils, Target<Address> target, Map<Integer, String> ifIndexToName) {
+
+        // --- 2) ARP table (ipNetToMediaTable) ---
+        Map<String, Integer> ifIndexByKey = new HashMap<>();
+        Map<String, String> macByKey = new HashMap<>();
+        Map<String, String> ipByKey = new HashMap<>();
+        Map<String, Integer> typeByKey = new HashMap<>();
+
+        OID ipNetToMediaIfIndexOid  = new OID(OID_IP_NET_TO_MEDIA_IFINDEX);
+        OID ipNetToMediaPhysOid     = new OID(OID_IP_NET_TO_MEDIA_PHYSADDR);
+        OID ipNetToMediaNetAddrOid  = new OID(OID_IP_NET_TO_MEDIA_NETADDR);
+        OID ipNetToMediaTypeOid     = new OID(OID_IP_NET_TO_MEDIA_TYPE);
+
+        // 2a) ipNetToMediaIfIndex
+        for (TreeEvent event : walk(treeUtils, target, ipNetToMediaIfIndexOid)) {
+            if (event == null || event.isError()) continue;
+            if (event.getVariableBindings() == null) continue;
+
+            for (VariableBinding vb : event.getVariableBindings()) {
+                if (vb == null) continue;
+                String key = vb.getOid().getSuffix(ipNetToMediaIfIndexOid).toString();
+                int ifIndex = vb.getVariable().toInt();
+                ifIndexByKey.put(key, ifIndex);
+            }
+        }
+
+        // 2b) ipNetToMediaPhysAddress (MAC)
+        for (TreeEvent event : walk(treeUtils, target, ipNetToMediaPhysOid)) {
+            if (event == null || event.isError()) continue;
+            if (event.getVariableBindings() == null) continue;
+
+            for (VariableBinding vb : event.getVariableBindings()) {
+                if (vb == null) continue;
+                String key = vb.getOid().getSuffix(ipNetToMediaPhysOid).toString();
+
+                // Defensive: some agents might return non-OctetString; handle gracefully.
+                String macStr = null;
+                if (vb.getVariable() instanceof OctetString) {
+                    macStr = octetStringToMac((OctetString) vb.getVariable());
+                } else {
+                    macStr = vb.getVariable().toString();
+                }
+
+                macByKey.put(key, macStr);
+            }
+        }
+
+        // 2c) ipNetToMediaNetAddress (IP)
+        for (TreeEvent event : walk(treeUtils, target, ipNetToMediaNetAddrOid)) {
+            if (event == null || event.isError()) continue;
+            if (event.getVariableBindings() == null) continue;
+
+            for (VariableBinding vb : event.getVariableBindings()) {
+                if (vb == null) continue;
+                String key = vb.getOid().getSuffix(ipNetToMediaNetAddrOid).toString();
+                String ipStr = vb.getVariable().toString();  // IpAddress -> "x.x.x.x"
+                ipByKey.put(key, ipStr);
+            }
+        }
+
+        // 2d) ipNetToMediaType
+        for (TreeEvent event : walk(treeUtils, target, ipNetToMediaTypeOid)) {
+            if (event == null || event.isError()) continue;
+            if (event.getVariableBindings() == null) continue;
+
+            for (VariableBinding vb : event.getVariableBindings()) {
+                if (vb == null) continue;
+                String key = vb.getOid().getSuffix(ipNetToMediaTypeOid).toString();
+                int type = vb.getVariable().toInt();
+                typeByKey.put(key, type);
+            }
+        }
+
+        // --- 3) Build ArpEntry list ---
+        List<ArpEntry> result = new ArrayList<>();
+
+        for (Map.Entry<String, String> e : ipByKey.entrySet()) {
+            String key = e.getKey();
+            String ip = e.getValue();
+
+            // IfIndex is required to know interface; if missing, skip
+            Integer ifIndexObj = ifIndexByKey.get(key);
+            if (ifIndexObj == null) {
+                continue;
+            }
+            int ifIndex = ifIndexObj;
+
+            String mac = macByKey.get(key);  // may be null if incomplete
+            int type = typeByKey.getOrDefault(key, 0);
+            String ifName = ifIndexToName.get(ifIndex);
+
+            ArpEntry entry = new ArpEntry(ip, mac, ifIndex, ifName, type);
+            result.add(entry);
+        }
+
+        arpList = result;
+
+        // --- keep old arrays loosely in sync for compatibility ---
+        ArrayList<String> ipNames = new ArrayList<>();
+        ArrayList<String> idxStrings = new ArrayList<>();
+        for (ArpEntry n : arpList) {
+            ipNames.add(n.ip);
+            idxStrings.add(Integer.toString(n.ifIndex));
+        }
+        nameList = ipNames.toArray(new String[0]);
+        indexList = idxStrings.toArray(new String[0]);
     }
 
     /**

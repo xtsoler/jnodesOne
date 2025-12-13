@@ -9,6 +9,7 @@ import org.snmp4j.Snmp;
 import org.snmp4j.Target;
 import org.snmp4j.TransportMapping;
 import org.snmp4j.UserTarget;
+import org.snmp4j.CommunityTarget;
 import org.snmp4j.mp.MPv3;
 import org.snmp4j.mp.SnmpConstants;
 import org.snmp4j.security.AuthSHA;
@@ -38,7 +39,13 @@ public class snmpGetScriptList {
     private String[] scriptList = {};
     private String[] indexList = {};
 
+    // --- Inputs used to decide SNMP mode ---
+    // If "thecommunity" is non-empty, we will use SNMPv1 community mode.
+    // Otherwise, we will use SNMPv3 USM mode (username/auth/priv).
     private final String thehost;
+    private final String thecommunity;   // <-- NEW: v1 community mode
+
+    // v3 credentials (kept as-is, but may be null when using v1)
     private final String theusername;
     private final String theauthPass;
     private final String theprivPass;
@@ -50,6 +57,27 @@ public class snmpGetScriptList {
         this.theauthPass = authPass;
         this.theprivPass = privPass;
         this.theencr = encr;
+
+        // Ensure community is empty so update() chooses SNMPv3 path
+        this.thecommunity = null;
+
+        update();
+    }
+
+    /**
+     * New constructor: SNMPv1 mode (community string).
+     * Use this when your node has a community (SNMPv1).
+     */
+    public snmpGetScriptList(String host, String community) {
+        this.thehost = host;
+        this.thecommunity = (community != null ? community : "");
+
+        // Ensure v3 fields are empty so update() chooses SNMPv1 path
+        this.theusername = null;
+        this.theauthPass = null;
+        this.theprivPass = null;
+        this.theencr = null;
+
         update();
     }
 
@@ -57,7 +85,18 @@ public class snmpGetScriptList {
      * Returns the SNMP table of script names and fills scriptList / indexList.
      */
     private void update() {
-        snmpGetTableV3("udp:" + thehost + "/161", theusername, theauthPass, theprivPass, MIKROTIK_SCRIPT_NAME_OID, theencr);
+        // Decide SNMP mode:
+        // - If community exists -> SNMPv1
+        // - else -> SNMPv3
+        String address = "udp:" + thehost + "/161";
+
+        if (thecommunity != null && !thecommunity.trim().isEmpty()) {
+            // --- SNMPv1 path ---
+            snmpGetTableV1(address, thecommunity.trim(), MIKROTIK_SCRIPT_NAME_OID);
+        } else {
+            // --- SNMPv3 path (existing behavior) ---
+            snmpGetTableV3(address, theusername, theauthPass, theprivPass, MIKROTIK_SCRIPT_NAME_OID, theencr);
+        }
     }
 
     /**
@@ -78,6 +117,71 @@ public class snmpGetScriptList {
 
     public String[] getIndex() {
         return indexList;
+    }
+
+    /**
+     * SNMPv1 community-based walk and fill arrays.
+     *
+     * - No USM / user / auth / priv.
+     * - Uses CommunityTarget and SNMP version1.
+     */
+    private void snmpGetTableV1(String address, String community, String oidBase) {
+        Snmp snmp = null;
+        try {
+            TransportMapping<UdpAddress> transport = new DefaultUdpTransportMapping();
+            snmp = new Snmp(transport);
+            transport.listen();
+
+            // TreeUtils works fine for community targets as well
+            TreeUtils treeUtils = new TreeUtils(snmp, new DefaultPDUFactory());
+
+            // Community Target (SNMPv1)
+            CommunityTarget<Address> target = new CommunityTarget<>();
+            target.setAddress(GenericAddress.parse(address));
+            target.setCommunity(new OctetString(community));
+            target.setRetries(2);
+            target.setTimeout(1500);
+
+            // You explicitly asked for SNMPv1
+            target.setVersion(SnmpConstants.version1);
+
+            List<TreeEvent> output = walk(treeUtils, target, new OID(oidBase));
+
+            ArrayList<String> names = new ArrayList<>();
+            ArrayList<String> indices = new ArrayList<>();
+
+            for (TreeEvent event : output) {
+                if (event == null || event.isError()) {
+                    continue;
+                }
+                if (event.getVariableBindings() == null) {
+                    continue;
+                }
+
+                for (VariableBinding vb : event.getVariableBindings()) {
+                    if (vb == null) {
+                        continue;
+                    }
+                    // Script name
+                    names.add(vb.getVariable().toString());
+                    // Index = suffix of the row under the base OID
+                    indices.add(vb.getOid().getSuffix(new OID(oidBase)).toString());
+                }
+            }
+
+            scriptList = names.toArray(new String[0]);
+            indexList = indices.toArray(new String[0]);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            if (snmp != null) {
+                try {
+                    snmp.close();
+                } catch (Exception ignore) {
+                }
+            }
+        }
     }
 
     /**
@@ -105,6 +209,9 @@ public class snmpGetScriptList {
             }
             SecurityModels.getInstance().addSecurityModel(usm);
 
+            // NOTE:
+            // This uses AES128 in the UsmUser object, matching your original code.
+            // If you want the UsmUser to match encr exactly, we can adjust that too.
             UsmUser user = new UsmUser(
                     new OctetString(username),
                     AuthSHA.ID, new OctetString(authPass),

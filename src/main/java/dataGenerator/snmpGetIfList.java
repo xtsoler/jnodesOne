@@ -13,6 +13,7 @@ import org.snmp4j.Snmp;
 import org.snmp4j.Target;
 import org.snmp4j.TransportMapping;
 import org.snmp4j.UserTarget;
+import org.snmp4j.CommunityTarget;
 import org.snmp4j.mp.MPv3;
 import org.snmp4j.mp.SnmpConstants;
 import org.snmp4j.security.AuthSHA;
@@ -39,20 +40,61 @@ public class snmpGetIfList {
 
     String[] nameList = {};
     String[] indexList = {};
-    String thehost, theusername, theauthPass, theprivPass, theencr;
 
+    // --- Inputs used to decide SNMP mode ---
+    // If "thecommunity" is non-empty, we will use SNMPv1 community mode.
+    // Otherwise, we will use SNMPv3 USM mode (username/auth/priv).
+    String thehost, thecommunity, theusername, theauthPass, theprivPass, theencr;
+
+    /**
+     * Existing constructor: SNMPv3 mode.
+     * If you pass an empty username, authPass, etc, it will likely fail at runtime.
+     */
     public snmpGetIfList(String host, String username, String authPass, String privPass, String encr) {
         thehost = host;
         theusername = username;
         theauthPass = authPass;
         theprivPass = privPass;
         theencr = encr;
+
+        // Ensure community is null/empty so update() chooses SNMPv3 path
+        thecommunity = null;
+
+        update();
+    }
+
+    /**
+     * New constructor: SNMPv1 mode (community string).
+     * This is what you want when the node has "community".
+     */
+    public snmpGetIfList(String host, String community) {
+        thehost = host;
+        thecommunity = community;
+
+        // Ensure v3 fields are empty so update() chooses SNMPv1 path
+        theusername = null;
+        theauthPass = null;
+        theprivPass = null;
+        theencr = null;
+
         update();
     }
 
     private void update() {
+        // ifDescr table: 1.3.6.1.2.1.2.2.1.2
+        // This is a standard interface description column.
         String oidValue = "1.3.6.1.2.1.2.2.1.2"; // ifDescr table
-        snmpGetTableV3("udp:" + thehost + "/161", theusername, theauthPass, theprivPass, oidValue, theencr);
+
+        // Build SNMP4J address format
+        String addr = "udp:" + thehost + "/161";
+
+        // --- Decision: SNMPv1 if community exists, else SNMPv3 ---
+        // NOTE: You asked: "do snmpv1 instead of v3 when the node has community"
+        if (thecommunity != null && !thecommunity.trim().isEmpty()) {
+            snmpGetTableV1(addr, thecommunity.trim(), oidValue);
+        } else {
+            snmpGetTableV3(addr, theusername, theauthPass, theprivPass, oidValue, theencr);
+        }
     }
 
     public static List<Object> convertTreeEventToList(TreeSelectionEvent event) {
@@ -71,11 +113,15 @@ public class snmpGetIfList {
         return dataList;
     }
 
-    static List<TreeEvent> walk(TreeUtils treeUtils, Target<Address> targetV3, OID oid) {
+    /**
+     * Common "walk" helper used by both SNMPv1 and SNMPv3.
+     * It uses TreeUtils.getSubtree() and collects the resulting TreeEvents.
+     */
+    static List<TreeEvent> walk(TreeUtils treeUtils, Target<Address> target, OID oid) {
         List<TreeEvent> walkResult = new LinkedList<>();
         InternalTreeListener treeListener = new InternalTreeListener(walkResult);
 
-        treeUtils.getSubtree(targetV3, oid, null, treeListener);
+        treeUtils.getSubtree(target, oid, null, treeListener);
         try {
             treeListener.waitForResult();
         } catch (InterruptedException e) {
@@ -84,6 +130,79 @@ public class snmpGetIfList {
         return walkResult;
     }
 
+    /**
+     * SNMPv1 community-based table walk.
+     *
+     * - No USM / user / auth / priv.
+     * - Uses CommunityTarget and SNMP version1.
+     * - Fetches the same ifDescr table.
+     */
+    public void snmpGetTableV1(String address, String community, String oidValue) {
+        Snmp snmp = null;
+        try {
+            TransportMapping<UdpAddress> transport = new DefaultUdpTransportMapping();
+            snmp = new Snmp(transport);
+            transport.listen();
+
+            // TreeUtils works fine for community targets as well
+            TreeUtils treeUtils = new TreeUtils(snmp, new DefaultPDUFactory());
+
+            // Community Target (SNMPv1)
+            CommunityTarget<Address> target = new CommunityTarget<>();
+            target.setAddress(GenericAddress.parse(address)); // e.g., "udp:127.0.0.1/161"
+            target.setCommunity(new OctetString(community));
+            target.setRetries(3);
+            target.setTimeout(3000);
+
+            // You explicitly asked for SNMPv1
+            target.setVersion(SnmpConstants.version1);
+
+            List<TreeEvent> output = walk(treeUtils, target, new OID(oidValue));
+
+            // Convert walk output into nameList/indexList just like v3
+            ArrayList<String> names = new ArrayList<>();
+            ArrayList<String> indeces = new ArrayList<>();
+            for (TreeEvent event : output) {
+                if (event == null || event.isError()) {
+                    continue;
+                }
+                if (event.getVariableBindings() == null) {
+                    continue;
+                }
+
+                for (VariableBinding vb : event.getVariableBindings()) {
+                    if (vb == null) {
+                        continue;
+                    }
+                    names.add(vb.getVariable().toString());
+                    indeces.add(vb.getOid().getSuffix(new OID(oidValue)).toString());
+                }
+            }
+
+            nameList = names.toArray(new String[0]);
+            indexList = indeces.toArray(new String[0]);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            if (snmp != null) {
+                try {
+                    snmp.close();
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+            }
+        }
+    }
+
+    /**
+     * SNMPv3 USM-based table walk (your existing code path).
+     *
+     * Notes:
+     * - Requires username + authPass + privPass for AUTH_PRIV security level.
+     * - If you ever want AUTH_NO_PRIV or NO_AUTH_NO_PRIV, you’d change security level
+     *   and user configuration accordingly.
+     */
     public void snmpGetTableV3(String address, String username, String authPass, String privPass, String oidValue, String encr) {
         Snmp snmp = null;
         try {
@@ -97,16 +216,20 @@ public class snmpGetIfList {
             SecurityProtocols.getInstance().addAuthenticationProtocol(new AuthSHA());
             SecurityModels.getInstance().addSecurityModel(usm);
 
+            // Default: AES128 privacy
             UsmUser user = new UsmUser(
                     new OctetString(username),
                     AuthSHA.ID, new OctetString(authPass),
                     PrivAES128.ID, new OctetString(privPass));
+
+            // Optional: DES privacy
             if (encr != null && encr.equals("DES")) {
                 user = new UsmUser(
                         new OctetString(username),
                         AuthSHA.ID, new OctetString(authPass),
                         PrivDES.ID, new OctetString(privPass));
             }
+
             // non-deprecated overload
             snmp.getUSM().addUser(user);
 

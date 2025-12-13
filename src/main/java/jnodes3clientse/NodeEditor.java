@@ -35,29 +35,17 @@ public class NodeEditor extends javax.swing.JPanel {
     public NodeEditor() {
         initComponents();
         iconsList.setModel(iconModel);
-        // ensure iconsList exists & is wired to the scrollpane
-        if (iconsList == null) {
-            iconsList = new javax.swing.JList<>();
-            jScrollPane1.setViewportView(iconsList);
-        }
-        if (!(iconsList.getModel() instanceof DefaultListModel)) {
-            iconsList.setModel(new DefaultListModel<String>());
-        }
+
         populateList();
+        v3enabled(jRadioButton2.isSelected());
+
     }
 
     public NodeEditor(Node node) {
         System.out.println(node.getID());
         initComponents();
         iconsList.setModel(iconModel);
-        // ensure iconsList exists & is wired to the scrollpane
-        if (iconsList == null) {
-            iconsList = new javax.swing.JList<>();
-            jScrollPane1.setViewportView(iconsList);
-        }
-        if (!(iconsList.getModel() instanceof DefaultListModel)) {
-            iconsList.setModel(new DefaultListModel<>());
-        }
+
         this.theNode = node;
         selectedColor = node.getNodeColor();
 
@@ -66,7 +54,7 @@ public class NodeEditor extends javax.swing.JPanel {
 
         jButton1.setBackground(node.getNodeColor());
 
-        if (!node.getIp().isEmpty()) {
+        if (node.getIp() != null && !node.getIp().isEmpty()) {
             ipCheckBox.setSelected(true);
             ipField.setText(node.getIp());
         }
@@ -75,6 +63,7 @@ public class NodeEditor extends javax.swing.JPanel {
             snmpCommunityCheckBox.setSelected(true);
             jRadioButton1.setSelected(true);
             jRadioButton2.setSelected(false);
+            v3enabled(false);
         }
         if (node.getImagefilename() != null && !node.getImagefilename().isEmpty()) {
             iconCheckBox.setSelected(true);
@@ -84,19 +73,10 @@ public class NodeEditor extends javax.swing.JPanel {
             snmpUsernameCheckBox.setSelected(true);
             jRadioButton2.setSelected(true);
             jRadioButton1.setSelected(false);
-            snmpCommunityField.setVisible(false);
-            snmpCommunityCheckBox.setVisible(false);
-            snmpUsernameField.setVisible(true);
-            snmpUsernameCheckBox.setVisible(true);
-            //snmpAuthField.setVisible(true);
-            snmpAuthFieldObf.setVisible(true);
-            snmpAuthCheckBox.setVisible(true);
-            //snmpPrivField.setVisible(true);
-            snmpPrivFieldObf.setVisible(true);
-            snmpPrivCheckBox.setVisible(true);
+            v3enabled(true);
         }
         if (node.getSnmpv3encr() != null && !node.getSnmpv3encr().isEmpty()) {
-            if(node.getSnmpv3encr().equals("DES")){
+            if (node.getSnmpv3encr().equals("DES")) {
                 snmpEncr.setSelectedIndex(1);
             }
         }
@@ -106,16 +86,7 @@ public class NodeEditor extends javax.swing.JPanel {
             snmpAuthCheckBox.setSelected(true);
             jRadioButton2.setSelected(true);
             jRadioButton1.setSelected(false);
-            snmpCommunityField.setVisible(false);
-            snmpCommunityCheckBox.setVisible(false);
-            snmpUsernameField.setVisible(true);
-            snmpUsernameCheckBox.setVisible(true);
-            //snmpAuthField.setVisible(true);
-            snmpAuthFieldObf.setVisible(true);
-            snmpAuthCheckBox.setVisible(true);
-            //snmpPrivField.setVisible(true);
-            snmpPrivFieldObf.setVisible(true);
-            snmpPrivCheckBox.setVisible(true);
+            v3enabled(true);
         }
         if (node.getSnmpv3priv() != null && !node.getSnmpv3priv().isEmpty()) {
             //snmpPrivField.setText(node.getSnmpv3priv());
@@ -123,22 +94,16 @@ public class NodeEditor extends javax.swing.JPanel {
             snmpPrivCheckBox.setSelected(true);
             jRadioButton2.setSelected(true);
             jRadioButton1.setSelected(false);
-            snmpCommunityField.setVisible(false);
-            snmpCommunityCheckBox.setVisible(false);
-            snmpUsernameField.setVisible(true);
-            snmpUsernameCheckBox.setVisible(true);
-            //snmpAuthField.setVisible(true);
-            snmpAuthFieldObf.setVisible(true);
-            snmpAuthCheckBox.setVisible(true);
-            //snmpPrivField.setVisible(true);
-            snmpPrivFieldObf.setVisible(true);
-            snmpPrivCheckBox.setVisible(true);
+            v3enabled(true);
         }
         populateList();
         if (selected > -1) {
             iconsList.setEnabled(true);
             iconsList.setSelectedIndex(selected);
         }
+
+        v3enabled(jRadioButton2.isSelected());
+
     }
 
     private void populateList() {
@@ -149,6 +114,11 @@ public class NodeEditor extends javax.swing.JPanel {
         if (folder.exists()) {
             File[] listOfFiles = folder.listFiles(new PNGFilter());
             if (listOfFiles != null) {
+
+                java.util.Arrays.sort(listOfFiles, (a, b)
+                        -> a.getName().compareToIgnoreCase(b.getName())
+                );
+
                 for (int i = 0; i < listOfFiles.length; i++) {
                     File f = listOfFiles[i];
                     if (f.isFile()) {
@@ -162,33 +132,113 @@ public class NodeEditor extends javax.swing.JPanel {
             }
         }
 
+        iconsList.setEnabled(iconCheckBox.isSelected());
+
         if (selected > -1) {
-            iconsList.setEnabled(true);
             iconsList.setSelectedIndex(selected);
+        } else {
+            iconsList.clearSelection();
         }
     }
 
     public Node getSelection() {
-        Node output = null;
+        // --- ICON (fix #2 + #3) ---
+        String icon = null;
+        if (iconCheckBox.isSelected()) {
+            icon = iconsList.getSelectedValue();   // may be null, that's OK
+            // If you want to force selection when Icon is checked, you could validate here.
+        }
+
+        // --- IP (fix #3) ---
+        String ip = "";
+        if (ipCheckBox.isSelected()) {
+            ip = ipField.getText();
+            if (ip == null) {
+                ip = "";
+            } else {
+                ip = ip.trim();
+            }
+        }
+
+        Node output;
+
         if (jRadioButton1.isSelected()) {
-            output = new Node(iconCheckBox.isSelected() ? iconsList.getSelectedValue().toString() : null, null, nameField.getText(), ipField.getText() != null ? ipField.getText() : null, null, null, null, snmpCommunityField.getText() != null ? snmpCommunityField.getText() : null, false);
+            // SNMPv1
+
+            String community = null;
+            if (snmpCommunityCheckBox.isSelected()) {
+                community = snmpCommunityField.getText();
+                if (community != null) {
+                    community = community.trim();
+                    if (community.isEmpty()) {
+                        community = null;
+                    }
+                }
+            }
+
+            output = new Node(
+                    icon,
+                    null,
+                    nameField.getText(),
+                    ip,
+                    null, null, null,
+                    community,
+                    false
+            );
+
+            // Ensure v3 is cleared
             output.setSnmpv3username(null);
             output.setSnmpv3auth(null);
             output.setSnmpv3priv(null);
             output.setSnmpv3encr(null);
+
         } else {
-            output = new Node(iconCheckBox.isSelected() ? (String) iconsList.getSelectedValue() : null, null, nameField.getText(), ipField.getText() != null ? ipField.getText() : null, null, null, null, null, false);
-            output.setSnmpv3username(snmpUsernameField.getText() != null ? snmpUsernameField.getText() : null);
-            output.setSnmpv3encr(snmpEncr.getSelectedItem().toString());
-            //output.setSnmpv3auth(snmpAuthField.getText() != null ? snmpAuthField.getText() : null);
-            //output.setSnmpv3priv(snmpPrivField.getText() != null ? snmpPrivField.getText() : null);
-            if (snmpAuthFieldObf.getPassword() != null && snmpAuthFieldObf.getPassword().length > 0) {
-                output.setSnmpv3auth(String.valueOf(snmpAuthFieldObf.getPassword()));
+            // SNMPv3
+
+            String user = null;
+            if (snmpUsernameCheckBox.isSelected()) {
+                user = snmpUsernameField.getText();
+                if (user != null) {
+                    user = user.trim();
+                    if (user.isEmpty()) {
+                        user = null;
+                    }
+                }
             }
-            if (snmpPrivFieldObf.getPassword() != null && snmpPrivFieldObf.getPassword().length > 0) {
-                output.setSnmpv3priv(String.valueOf(snmpPrivFieldObf.getPassword()));
+
+            String auth = null;
+            if (snmpAuthCheckBox.isSelected() && snmpAuthFieldObf.getPassword() != null && snmpAuthFieldObf.getPassword().length > 0) {
+                auth = String.valueOf(snmpAuthFieldObf.getPassword());
             }
+
+            String priv = null;
+            if (snmpPrivCheckBox.isSelected() && snmpPrivFieldObf.getPassword() != null && snmpPrivFieldObf.getPassword().length > 0) {
+                priv = String.valueOf(snmpPrivFieldObf.getPassword());
+            }
+
+            // Only set encryption if priv is being used (otherwise it’s meaningless)
+            String encr = null;
+            if (snmpPrivCheckBox.isSelected()) {
+                Object sel = snmpEncr.getSelectedItem();
+                encr = (sel != null) ? sel.toString() : null;
+            }
+
+            output = new Node(
+                    icon,
+                    null,
+                    nameField.getText(),
+                    ip,
+                    null, null, null,
+                    null,
+                    false
+            );
+
+            output.setSnmpv3username(user);
+            output.setSnmpv3auth(auth);
+            output.setSnmpv3priv(priv);
+            output.setSnmpv3encr(encr);
         }
+
         output.setNodeColor(selectedColor);
         return output;
     }
@@ -246,12 +296,10 @@ public class NodeEditor extends javax.swing.JPanel {
         });
 
         snmpCommunityField.setEnabled(false);
-        snmpCommunityField.setVisible(false);
 
         jLabel1.setText("Name:");
 
         snmpCommunityCheckBox.setText("community");
-        snmpCommunityCheckBox.setVisible(false);
         snmpCommunityCheckBox.addChangeListener(new javax.swing.event.ChangeListener() {
             public void stateChanged(javax.swing.event.ChangeEvent evt) {
                 snmpCommunityCheckBoxStateChanged(evt);
@@ -259,8 +307,7 @@ public class NodeEditor extends javax.swing.JPanel {
         });
 
         buttonGroup1.add(jRadioButton1);
-        jRadioButton1.setText("SNMPv1/2");
-        jRadioButton1.setEnabled(false);
+        jRadioButton1.setText("SNMPv1");
         jRadioButton1.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 jRadioButton1ActionPerformed(evt);
@@ -412,81 +459,50 @@ public class NodeEditor extends javax.swing.JPanel {
     private void iconCheckBoxStateChanged(javax.swing.event.ChangeEvent evt) {//GEN-FIRST:event_iconCheckBoxStateChanged
         // TODO add your handling code here:
         iconsList.setEnabled(iconCheckBox.isSelected());
+        if (!iconCheckBox.isSelected()) {
+            iconsList.clearSelection();
+        }
     }//GEN-LAST:event_iconCheckBoxStateChanged
 
     private void ipCheckBoxStateChanged(javax.swing.event.ChangeEvent evt) {//GEN-FIRST:event_ipCheckBoxStateChanged
         // TODO add your handling code here:
-        ipField.setEnabled(ipCheckBox.isSelected());
-        if (!ipCheckBox.isSelected()) {
-            ipField.setText("");
-        }
+        syncCheckBoxAndField(ipCheckBox, ipField);
     }//GEN-LAST:event_ipCheckBoxStateChanged
 
     private void snmpCommunityCheckBoxStateChanged(javax.swing.event.ChangeEvent evt) {//GEN-FIRST:event_snmpCommunityCheckBoxStateChanged
         // TODO add your handling code here:
-        snmpCommunityField.setEnabled(snmpCommunityCheckBox.isSelected());
-        if (!snmpCommunityCheckBox.isSelected()) {
-            snmpCommunityField.setText("");
-        }
+        syncCheckBoxAndField(snmpCommunityCheckBox, snmpCommunityField);
     }//GEN-LAST:event_snmpCommunityCheckBoxStateChanged
 
     private void jRadioButton1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jRadioButton1ActionPerformed
         // TODO add your handling code here:
-        snmpCommunityCheckBox.setVisible(true);
-        snmpCommunityField.setVisible(true);
-        snmpUsernameCheckBox.setVisible(false);
-        snmpUsernameField.setVisible(false);
-        snmpAuthCheckBox.setVisible(false);
-        //snmpAuthField.setVisible(false);
-        snmpAuthFieldObf.setVisible(false);
-        snmpPrivCheckBox.setVisible(false);
-        //snmpPrivField.setVisible(false);
-        snmpPrivFieldObf.setVisible(false);
+        v3enabled(false);
     }//GEN-LAST:event_jRadioButton1ActionPerformed
 
     private void jRadioButton2ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jRadioButton2ActionPerformed
-        snmpCommunityCheckBox.setVisible(false);
-        snmpCommunityField.setVisible(false);
-        snmpUsernameCheckBox.setVisible(true);
-        snmpUsernameField.setVisible(true);
-        snmpAuthCheckBox.setVisible(true);
-        //snmpAuthField.setVisible(true);
-        snmpAuthFieldObf.setVisible(true);
-        snmpPrivCheckBox.setVisible(true);
-        //snmpPrivField.setVisible(true);
-        snmpPrivFieldObf.setVisible(true);
+        v3enabled(true);
     }//GEN-LAST:event_jRadioButton2ActionPerformed
 
     private void snmpUsernameCheckBoxStateChanged(javax.swing.event.ChangeEvent evt) {//GEN-FIRST:event_snmpUsernameCheckBoxStateChanged
-        snmpUsernameField.setEnabled(snmpUsernameCheckBox.isSelected());
-        if (!snmpUsernameCheckBox.isSelected()) {
-            snmpUsernameField.setText("");
-        }
+        syncCheckBoxAndField(snmpUsernameCheckBox, snmpUsernameField);
     }//GEN-LAST:event_snmpUsernameCheckBoxStateChanged
 
     private void snmpAuthCheckBoxStateChanged(javax.swing.event.ChangeEvent evt) {//GEN-FIRST:event_snmpAuthCheckBoxStateChanged
-        snmpAuthFieldObf.setEnabled(snmpAuthCheckBox.isSelected());
-        if (!snmpAuthCheckBox.isSelected()) {
-            //snmpAuthField.setText("");
-            snmpAuthFieldObf.setText("");
-        }
+        syncCheckBoxAndField(snmpAuthCheckBox, snmpAuthFieldObf);
     }//GEN-LAST:event_snmpAuthCheckBoxStateChanged
 
     private void snmpPrivCheckBoxStateChanged(javax.swing.event.ChangeEvent evt) {//GEN-FIRST:event_snmpPrivCheckBoxStateChanged
-        snmpPrivFieldObf.setEnabled(snmpPrivCheckBox.isSelected());
-        if (!snmpPrivCheckBox.isSelected()) {
-            //snmpPrivField.setText("");
-            snmpPrivFieldObf.setText("");
-        }
+        syncPrivControls();
     }//GEN-LAST:event_snmpPrivCheckBoxStateChanged
 
     private void jButton1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton1ActionPerformed
-        if (theNode != null) {
-            selectedColor = JColorChooser.showDialog(null, "Choose a color", theNode.getNodeColor());
-        } else {
-            selectedColor = JColorChooser.showDialog(null, "Choose a color", selectedColor);
+        Color base = (theNode != null) ? theNode.getNodeColor() : selectedColor;
+        Color c = JColorChooser.showDialog(null, "Choose a color", base);
+
+        if (c != null) { // user didn't cancel
+            selectedColor = c;
+            jButton1.setBackground(selectedColor);
         }
-        jButton1.setBackground(selectedColor);
     }//GEN-LAST:event_jButton1ActionPerformed
 
     private void ipFieldActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_ipFieldActionPerformed
@@ -516,11 +532,61 @@ public class NodeEditor extends javax.swing.JPanel {
     private javax.swing.JCheckBox snmpUsernameCheckBox;
     private javax.swing.JTextField snmpUsernameField;
     // End of variables declaration//GEN-END:variables
+
+    private void v3enabled(boolean v3) {
+
+        // --- SNMPv1 ---
+        snmpCommunityCheckBox.setEnabled(!v3);
+        if (v3) {
+            snmpCommunityCheckBox.setSelected(false);
+        }
+        syncCheckBoxAndField(snmpCommunityCheckBox, snmpCommunityField);
+
+        // --- SNMPv3 ---
+        snmpUsernameCheckBox.setEnabled(v3);
+        snmpAuthCheckBox.setEnabled(v3);
+        snmpPrivCheckBox.setEnabled(v3);
+
+        if (!v3) {
+            snmpUsernameCheckBox.setSelected(false);
+            snmpAuthCheckBox.setSelected(false);
+            snmpPrivCheckBox.setSelected(false);
+        }
+
+        syncCheckBoxAndField(snmpUsernameCheckBox, snmpUsernameField);
+        syncCheckBoxAndField(snmpAuthCheckBox, snmpAuthFieldObf);
+        syncPrivControls();
+    }
+
+    private void syncCheckBoxAndField(javax.swing.JCheckBox cb, javax.swing.JComponent field) {
+        boolean enabled = cb.isSelected() && cb.isEnabled();
+        field.setEnabled(enabled);
+
+        if (!enabled) {
+            if (field instanceof javax.swing.JTextField) {
+                ((javax.swing.JTextField) field).setText("");
+            } else if (field instanceof javax.swing.JPasswordField) {
+                ((javax.swing.JPasswordField) field).setText("");
+            }
+        }
+    }
+
+    private void syncPrivControls() {
+        boolean enabled = snmpPrivCheckBox.isSelected() && snmpPrivCheckBox.isEnabled();
+        snmpPrivFieldObf.setEnabled(enabled);
+        snmpEncr.setEnabled(enabled);
+
+        if (!enabled) {
+            snmpPrivFieldObf.setText("");
+        }
+    }
+
 }
 
 class PNGFilter implements FilenameFilter {
 
+    @Override
     public boolean accept(File dir, String name) {
-        return (name.endsWith(".png"));
+        return name != null && name.toLowerCase().endsWith(".png");
     }
 }

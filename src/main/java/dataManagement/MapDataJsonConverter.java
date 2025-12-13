@@ -54,6 +54,9 @@ public class MapDataJsonConverter {
         if (node.getSnmpv3username() != null) {
             jsonNode.put("snmpv3username", node.getSnmpv3username());
         }
+        if (node.getCommunity() != null) {
+            jsonNode.put("community", node.getCommunity());
+        }
         if (node.getSalt() != null) {
             jsonNode.put("salt", node.getSalt());
         } else if (jnodes3clientse.Main.encryption_password == null) {
