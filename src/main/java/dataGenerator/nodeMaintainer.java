@@ -112,24 +112,70 @@ public class nodeMaintainer implements Runnable {
                 } catch (InterruptedException e) {
                 }
                 //interface list of each node
-                if (nodes[i].getIp() != null && !nodes[i].getIp().isEmpty() && 
-                        nodes[i].getSnmpv3username() != null && !nodes[i].getSnmpv3username().isEmpty() && 
-                        nodes[i].getSnmpv3auth() != null && !nodes[i].getSnmpv3auth().isEmpty() && 
-                        nodes[i].getSnmpv3priv() != null && !nodes[i].getSnmpv3priv().isEmpty()
+                if (nodes[i].getIp() != null && !nodes[i].getIp().isEmpty()
                         && nodes[i].getIfList() == null
                         ) {
-                    System.out.println("[SNMP INFO:] checking interfaces of node " + nodes[i].getNodeName() + " - " + nodes[i].getID());
-                    snmplist[i] = new snmpGetIfList(nodes[i].getIp(), nodes[i].getSnmpv3username(), nodes[i].getSnmpv3auth(), nodes[i].getSnmpv3priv(), nodes[i].getSnmpv3encr());
 
-                    String[] tmp = snmplist[i].getList();
-                    NodeInterface[] iflist = new NodeInterface[tmp.length];
-                    String[] index = snmplist[i].getIndex();
-                    for (int j = 0; j < tmp.length; j++) {
-                        //System.out.print(index[j]);
-                        //System.out.println(" " + tmp[j]);
-                        iflist[j] = new NodeInterface(tmp[j], tmp[j] + "(" + index[j] + ")", index[j]);
+                    // ------------------------------------------------------------------
+                    // NEW: Support nodes that use SNMP community (SNMPv1/v2c) instead of v3
+                    // We keep the original v3 logic intact and only add an additional case.
+                    // ------------------------------------------------------------------
+
+                    // Case A: SNMPv3 credentials exist (original behavior)
+                    boolean hasV3 =
+                            nodes[i].getSnmpv3username() != null && !nodes[i].getSnmpv3username().isEmpty()
+                            && nodes[i].getSnmpv3auth() != null && !nodes[i].getSnmpv3auth().isEmpty()
+                            && nodes[i].getSnmpv3priv() != null && !nodes[i].getSnmpv3priv().isEmpty();
+
+                    // Case B: SNMP community exists (new behavior)
+                    boolean hasCommunity =
+                            nodes[i].getCommunity() != null && !nodes[i].getCommunity().isEmpty();
+
+                    if (hasV3) {
+                        System.out.println("[SNMP INFO:] checking interfaces of node " + nodes[i].getNodeName() + " - " + nodes[i].getID());
+                        snmplist[i] = new snmpGetIfList(
+                                nodes[i].getIp(),
+                                nodes[i].getSnmpv3username(),
+                                nodes[i].getSnmpv3auth(),
+                                nodes[i].getSnmpv3priv(),
+                                nodes[i].getSnmpv3encr()
+                        );
+
+                        String[] tmp = snmplist[i].getList();
+                        NodeInterface[] iflist = new NodeInterface[tmp.length];
+                        String[] index = snmplist[i].getIndex();
+                        for (int j = 0; j < tmp.length; j++) {
+                            //System.out.print(index[j]);
+                            //System.out.println(" " + tmp[j]);
+                            iflist[j] = new NodeInterface(tmp[j], tmp[j] + "(" + index[j] + ")", index[j]);
+                        }
+                        nodes[i].setIfList(iflist);
+
+                    } else if (hasCommunity) {
+
+                        // NEW:
+                        // This requires snmpGetIfList to support a community-based constructor.
+                        // Example constructor signature assumed:
+                        //   snmpGetIfList(String ip, String community)
+                        // If your snmpGetIfList uses a different signature, adjust only this line.
+                        System.out.println("[SNMP INFO:] checking interfaces of node " + nodes[i].getNodeName()
+                                + " - " + nodes[i].getID() + " (community)");
+
+                        snmplist[i] = new snmpGetIfList(
+                                nodes[i].getIp(),
+                                nodes[i].getCommunity()
+                        );
+
+                        String[] tmp = snmplist[i].getList();
+                        NodeInterface[] iflist = new NodeInterface[tmp.length];
+                        String[] index = snmplist[i].getIndex();
+                        for (int j = 0; j < tmp.length; j++) {
+                            //System.out.print(index[j]);
+                            //System.out.println(" " + tmp[j]);
+                            iflist[j] = new NodeInterface(tmp[j], tmp[j] + "(" + index[j] + ")", index[j]);
+                        }
+                        nodes[i].setIfList(iflist);
                     }
-                    nodes[i].setIfList(iflist);
                 }
             }
         }

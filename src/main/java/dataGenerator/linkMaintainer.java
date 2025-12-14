@@ -20,7 +20,7 @@ public class linkMaintainer {
 
     private static final Logger LOG = Logger.getLogger(linkMaintainer.class.getName());
 
-    private static final long POLL_PERIOD_MS = 7500L; // period per node
+    private static final long POLL_PERIOD_MS = 7000L; // period per node
     private static final int  MAX_CONSECUTIVE_FAILS = 3;
     private static final long COOLDOWN_MS           = 60_000L; // 1 minute
 
@@ -38,6 +38,28 @@ public class linkMaintainer {
     private final ScheduledThreadPoolExecutor scheduler;
     private final List<ScheduledFuture<?>> scheduledTasks = new ArrayList<>();
     private volatile boolean alive = true;
+
+    // ----------------------------------------------------------------------
+    // NEW: SNMP mode resolution (supports SNMPv3 + SNMPv1 via community)
+    // ----------------------------------------------------------------------
+    // We keep existing logic intact; we only add a small routing layer so links
+    // can be polled using either v3 creds or v1 community.
+    private enum SnmpMode { V1, V3, NONE }
+
+    // ----------------------------------------------------------------------
+    // NEW: In-memory cache for HC support (SNMPv1 only)
+    // ----------------------------------------------------------------------
+    // Why this exists:
+    // - SNMPv1 may fail an entire PDU with errorStatus=noSuchName if HC OIDs are unsupported.
+    // - tools.Snmp.snmpLinkRateUpdateV1 currently does "try HC first, then fallback to 32-bit".
+    // - Without caching, we pay an extra HC request every poll even for devices that never support HC.
+    //
+    // Behavior:
+    // - Cache is per SOURCE NODE and lives until pollers are restarted (exactly as requested).
+    // - null/absent = UNKNOWN -> we allow trying HC once; tools.Snmp reports what it used.
+    // - TRUE = supports HC -> we keep trying HC (fast path).
+    // - FALSE = does not support HC -> we skip HC and go straight to 32-bit next polls.
+    private final ConcurrentHashMap<Node, Boolean> hcSupportByNode = new ConcurrentHashMap<>();
 
     public linkMaintainer(Link[] links) {
         this.links = Objects.requireNonNull(links, "links");
@@ -137,13 +159,61 @@ public class linkMaintainer {
                                 continue;
                             }
 
+                            // NEW: decide whether this link should be polled via SNMPv3 or SNMPv1
+                            SnmpMode mode = resolveSnmpMode(link);
+                            if (mode == SnmpMode.NONE) {
+                                // Should not happen because isSnmpConfigValid() already checked,
+                                // but keep it defensive and logic-neutral.
+                                continue;
+                            }
+
                             long t0 = System.nanoTime();
                             boolean ok;
                             try {
-                                ok = Snmp.snmpLinkRateUpdate(link);
+                                // NEW: route to v3 or v1 polling without changing the scheduler/cooldown logic
+                                if (mode == SnmpMode.V3) {
+                                    // NOTE: This requires tools.Snmp to expose a v3-specific method.
+                                    // If you only have a single method today, map this call inside tools.Snmp.
+                                    ok = Snmp.snmpLinkRateUpdateV3(link);
+                                } else {
+                                    // SNMPv1/v2c community path
+                                    //
+                                    // NEW: HC support caching
+                                    // - If we already learned HC support for this node, we tell Snmp whether to try HC.
+                                    // - If unknown, we allow trying HC (Snmp will report what happened).
+                                    Boolean cached = hcSupportByNode.get(node); // null => unknown
+                                    boolean allowTryHC = (cached == null) ? true : cached.booleanValue();
+
+                                    Snmp.V1PollResult res = Snmp.snmpLinkRateUpdateV1(link, allowTryHC);
+                                    ok = res.ok;
+
+                                    // NEW: update cache ONLY when we have a definitive result about HC usage/support.
+                                    // - If SNMP succeeded and usedHC=true -> HC supported for this node.
+                                    // - If SNMP succeeded and usedHC=false AND we had allowed HC -> HC not supported (or not usable),
+                                    //   so we can skip HC next time for this node.
+                                    if (res.ok) {
+                                        if (res.usedHC) {
+                                            // Set TRUE if new or changed
+                                            Boolean prev = hcSupportByNode.put(node, Boolean.TRUE);
+                                            if (prev == null || !prev) {
+                                                System.out.println("[SNMP INFO] HC counters supported for node "
+                                                        + safeNodeName(node) + " (community) - caching TRUE");
+                                            }
+                                        } else if (allowTryHC) {
+                                            // We tried HC (because allowTryHC=true) but ended up using 32-bit.
+                                            // That implies HC OIDs did not work for this node (at least for this ifIndex).
+                                            Boolean prev = hcSupportByNode.put(node, Boolean.FALSE);
+                                            if (prev == null || prev) {
+                                                System.out.println("[SNMP INFO] HC counters NOT supported for node "
+                                                        + safeNodeName(node) + " (community) - caching FALSE");
+                                            }
+                                        }
+                                        // else: allowTryHC was false, so we intentionally skipped HC; do not flip cache here.
+                                    }
+                                }
                             } catch (Exception e) {
                                 ok = false;
-                                LOG.log(Level.WARNING, "[SNMP] Exception polling " + safeLinkDesc(link), e);
+                                LOG.log(Level.WARNING, "[SNMP] Exception polling " + safeLinkDesc(link) + " (mode=" + mode + ")", e);
                             }
                             long dtMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - t0);
 
@@ -200,16 +270,42 @@ public class linkMaintainer {
     // ----------------------------------------------------------------------
     // Helpers
     // ----------------------------------------------------------------------
-    private boolean isSnmpConfigValid(Link l) {
-        if (l == null) return false;
-        if (l.getNodeSnmpSrc() == null) return false;
+
+    // NEW: Determine which SNMP mode applies for this link.
+    // - Prefer v3 if it looks configured.
+    // - Otherwise, allow community-based (v1/v2c) mode.
+    private SnmpMode resolveSnmpMode(Link l) {
+        if (l == null) return SnmpMode.NONE;
+        if (l.getNodeSnmpSrc() == null) return SnmpMode.NONE;
 
         var src = l.getNodeSnmpSrc();
-        return notEmpty(src.getIp())
-                && notEmpty(src.getSnmpv3auth())
-                && notEmpty(src.getSnmpv3priv())
-                && notEmpty(src.getSnmpv3username())
-                && notEmpty(l.getOidIndex());
+
+        // SNMPv3 config (existing fields used by your current implementation)
+        boolean v3 =
+                notEmpty(src.getIp())
+                        && notEmpty(src.getSnmpv3auth())
+                        && notEmpty(src.getSnmpv3priv())
+                        && notEmpty(src.getSnmpv3username())
+                        && notEmpty(l.getOidIndex());
+
+        if (v3) return SnmpMode.V3;
+
+        // SNMPv1/v2c config: IP + community + OID index
+        // IMPORTANT: This assumes Node has getCommunity() (common in your codebase).
+        boolean v1 =
+                notEmpty(src.getIp())
+                        && notEmpty(src.getCommunity())
+                        && notEmpty(l.getOidIndex());
+
+        if (v1) return SnmpMode.V1;
+
+        return SnmpMode.NONE;
+    }
+
+    private boolean isSnmpConfigValid(Link l) {
+        // Existing validation logic was v3-only.
+        // NEW: accept either v3 or v1/v2c config as "valid".
+        return resolveSnmpMode(l) != SnmpMode.NONE;
     }
 
     private static boolean notEmpty(String s) {
