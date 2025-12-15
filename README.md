@@ -10,6 +10,8 @@
 
 It lets you place nodes (routers, switches, servers, Wi-Fi APs, etc.), connect them with links, and then poll devices via SNMPv3 to keep track of link and node state.
 
+To enable web access to the created map, see jnodesWeb project: https://github.com/xtsoler/jnodesWeb
+
 ## Features
 
 - Interactive network map with draggable nodes and link visualization
