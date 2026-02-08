@@ -29,11 +29,70 @@ import org.snmp4j.smi.VariableBinding;
 import org.snmp4j.transport.DefaultUdpTransportMapping;
 import org.snmp4j.TransportMapping;
 import org.snmp4j.security.PrivDES;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class Snmp {
 
     private final static boolean show_info = false;
     private final static boolean debug_timing = false; // leave off; timing is in linkMaintainer
+
+    // ----------------------------------------------------------------------
+    // Shared SNMPv3 USM + engine ID cache
+    // ----------------------------------------------------------------------
+    private static final Object USM_LOCK = new Object();
+    private static volatile boolean USM_READY = false;
+    private static final ConcurrentHashMap<String, OctetString> ENGINE_ID_BY_ADDRESS = new ConcurrentHashMap<>();
+
+    private static void ensureUsmInitialized() {
+        if (USM_READY) {
+            return;
+        }
+        synchronized (USM_LOCK) {
+            if (USM_READY) {
+                return;
+            }
+
+            // Register auth/priv protocols once
+            SecurityProtocols.getInstance().addAuthenticationProtocol(new AuthSHA());
+            SecurityProtocols.getInstance().addPrivacyProtocol(new PrivAES128());
+            SecurityProtocols.getInstance().addPrivacyProtocol(new PrivDES());
+
+            // Register a single global USM once
+            USM usm = new USM(SecurityProtocols.getInstance(),
+                    new OctetString(MPv3.createLocalEngineID()), 0);
+            SecurityModels.getInstance().addSecurityModel(usm);
+
+            USM_READY = true;
+        }
+    }
+
+    private static OctetString getOrDiscoverEngineId(org.snmp4j.Snmp snmp, String host) {
+        if (host == null || host.isEmpty()) {
+            return null;
+        }
+
+        // Cache key = udp:<ip>/161 to keep it consistent with address format
+        String key = "udp:" + host + "/161";
+        OctetString cached = ENGINE_ID_BY_ADDRESS.get(key);
+        if (cached != null) {
+            return cached;
+        }
+
+        try {
+            Address addr = (Address) GenericAddress.parse(key);
+            // SNMP4J signature: discoverAuthoritativeEngineID(Address, timeoutMs)
+            byte[] engineIdBytes = snmp.discoverAuthoritativeEngineID(addr, 2500);
+            if (engineIdBytes == null || engineIdBytes.length == 0) {
+                return null;
+            }
+
+            OctetString engineId = new OctetString(engineIdBytes);
+            ENGINE_ID_BY_ADDRESS.put(key, engineId);
+            return engineId;
+        } catch (Exception e) {
+            return null;
+        }
+    }
 
     // ----------------------------------------------------------------------
     // NEW: result type for SNMPv1 polling
@@ -103,42 +162,52 @@ public class Snmp {
         long t0 = System.nanoTime();
 
         try {
+            // Ensure global USM and protocols are registered once (no per-poll overwrite).
+            ensureUsmInitialized();
+
             // Transport + listener
             TransportMapping<UdpAddress> transport = new DefaultUdpTransportMapping();
             snmp = new org.snmp4j.Snmp(transport);
             transport.listen();
 
-            // USM/Security
-            USM usm = new USM(SecurityProtocols.getInstance(),
-                    new OctetString(MPv3.createLocalEngineID()), 0);
-            SecurityProtocols.getInstance().addAuthenticationProtocol(new AuthSHA());
-            SecurityModels.getInstance().addSecurityModel(usm);
-
+            // Prepare user (authPriv)
+            OctetString secName = new OctetString(lnk.getNodeSnmpSrc().getSnmpv3username());
             UsmUser user = new UsmUser(
-                    new OctetString(lnk.getNodeSnmpSrc().getSnmpv3username()),
+                    secName,
                     AuthSHA.ID, new OctetString(lnk.getNodeSnmpSrc().getSnmpv3auth()),
                     PrivAES128.ID, new OctetString(lnk.getNodeSnmpSrc().getSnmpv3priv())
             );
-            if (lnk.getNodeSnmpSrc().getSnmpv3encr() != null && lnk.getNodeSnmpSrc().getSnmpv3encr().equals("DES")) {
+            if (lnk.getNodeSnmpSrc().getSnmpv3encr() != null
+                    && lnk.getNodeSnmpSrc().getSnmpv3encr().equals("DES")) {
                 user = new UsmUser(
-                        new OctetString(lnk.getNodeSnmpSrc().getSnmpv3username()),
+                        secName,
                         AuthSHA.ID, new OctetString(lnk.getNodeSnmpSrc().getSnmpv3auth()),
                         PrivDES.ID, new OctetString(lnk.getNodeSnmpSrc().getSnmpv3priv())
                 );
             }
 
-            snmp.getUSM().addUser(user);
+            // Discover authoritative engine ID and add user scoped to that engine.
+            OctetString engineId = getOrDiscoverEngineId(snmp, lnk.getNodeSnmpSrc().getIp());
+            if (engineId != null) {
+                snmp.getUSM().addUser(secName, engineId, user);
+            } else {
+                // Fallback (legacy behavior) if discovery fails.
+                snmp.getUSM().addUser(user);
+            }
 
             // Target
             UserTarget<Address> userTarget = new UserTarget<>();
             userTarget.setAddress((Address) GenericAddress.parse(
                     "udp:" + lnk.getNodeSnmpSrc().getIp() + "/161"));
             userTarget.setSecurityLevel(SecurityLevel.AUTH_PRIV);
-            userTarget.setSecurityName(new OctetString(lnk.getNodeSnmpSrc().getSnmpv3username()));
+            userTarget.setSecurityName(secName);
 
             userTarget.setRetries(1);
             userTarget.setTimeout(2500);
             userTarget.setVersion(SnmpConstants.version3);
+            if (engineId != null) {
+                userTarget.setAuthoritativeEngineID(engineId.getValue());
+            }
 
             // PDU
             ScopedPDU pdu = new ScopedPDU();
