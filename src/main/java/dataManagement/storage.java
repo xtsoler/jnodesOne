@@ -18,6 +18,7 @@ import message.mapData;
 public class storage {
 
     public static dbase<mapManager> maplist = new dbase<>("mapBase");
+    private static volatile boolean autoDiscoverInterfacesEnabled = true;
 
     public static mapData getMapDataById(String mapId) {
         mapManager mp = maplist.getEntry(mapId);
@@ -44,6 +45,19 @@ public class storage {
         //tools.ByteArrayUtils.writeBytes2File(tools.ByteArrayUtils.getSerializedBytes(map), "tmp.mpd");
     }
 
+    public static void setAutoDiscoverInterfacesEnabled(boolean enabled) {
+        autoDiscoverInterfacesEnabled = enabled;
+
+        Iterator keys = maplist.keySet().iterator();
+        while (keys.hasNext()) {
+            mapManager mp = (mapManager) maplist.get((String) keys.next());
+            if (mp != null) {
+                mp.setAutoDiscoverInterfaces(enabled);
+                mp.resetPing();
+            }
+        }
+    }
+
     public static void deleteMap(String mapId) {
         mapManager mi = maplist.getEntry(mapId);
         mi.kill();
@@ -54,6 +68,7 @@ public class storage {
         mapManager m = null;
         String id = maplist.addEntry(m);
         m = new mapManager(id, name, descr, owner, filename);
+        m.setAutoDiscoverInterfaces(autoDiscoverInterfacesEnabled);
         m.updateMap(new mapData(id));
         m.start();
         maplist.put(id, m);
@@ -71,6 +86,7 @@ public class storage {
                 mapManager m = null;
                 String id = maplist.addEntry(m);
                 m = new mapManager(id, "demo", "demo map description", "admin", filename);
+                m.setAutoDiscoverInterfaces(autoDiscoverInterfacesEnabled);
                 mapData map1;
                 //s.debug();
                 map1 = new mapData(id);

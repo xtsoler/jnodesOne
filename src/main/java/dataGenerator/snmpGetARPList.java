@@ -38,6 +38,7 @@ import org.snmp4j.util.DefaultPDUFactory;
 import org.snmp4j.util.TreeEvent;
 import org.snmp4j.util.TreeListener;
 import org.snmp4j.util.TreeUtils;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class snmpGetARPList {
 
@@ -61,6 +62,39 @@ public class snmpGetARPList {
 
     // --- ADDED v1 field ---
     String thecommunity; // when set, we use SNMPv1 instead of v3
+    private static final Object USM_LOCK = new Object();
+    private static volatile boolean USM_READY = false;
+    private static final ConcurrentHashMap<String, OctetString> ENGINE_ID_BY_ADDRESS = new ConcurrentHashMap<>();
+
+    private static void ensureUsmInitialized() {
+        if (USM_READY) return;
+        synchronized (USM_LOCK) {
+            if (USM_READY) return;
+            SecurityProtocols.getInstance().addAuthenticationProtocol(new AuthSHA());
+            SecurityProtocols.getInstance().addPrivacyProtocol(new PrivAES128());
+            SecurityProtocols.getInstance().addPrivacyProtocol(new PrivDES());
+            USM usm = new USM(SecurityProtocols.getInstance(),
+                    new OctetString(MPv3.createLocalEngineID()), 0);
+            SecurityModels.getInstance().addSecurityModel(usm);
+            USM_READY = true;
+        }
+    }
+
+    private static OctetString getOrDiscoverEngineId(Snmp snmp, String address) {
+        if (address == null || address.isEmpty()) return null;
+        OctetString cached = ENGINE_ID_BY_ADDRESS.get(address);
+        if (cached != null) return cached;
+        try {
+            Address addr = GenericAddress.parse(address);
+            byte[] engineIdBytes = snmp.discoverAuthoritativeEngineID(addr, 2500);
+            if (engineIdBytes == null || engineIdBytes.length == 0) return null;
+            OctetString engineId = new OctetString(engineIdBytes);
+            ENGINE_ID_BY_ADDRESS.put(address, engineId);
+            return engineId;
+        } catch (Exception e) {
+            return null;
+        }
+    }
 
     private List<ArpEntry> arpList = new ArrayList<>();
 
@@ -181,11 +215,7 @@ public class snmpGetARPList {
             snmp = new Snmp(transport);
             transport.listen();
 
-            // --- USM setup ---
-            USM usm = new USM(SecurityProtocols.getInstance(),
-                    new OctetString(MPv3.createLocalEngineID()), 0);
-            SecurityProtocols.getInstance().addAuthenticationProtocol(new AuthSHA());
-            SecurityModels.getInstance().addSecurityModel(usm);
+            ensureUsmInitialized();
 
             UsmUser user = new UsmUser(
                     new OctetString(username),
@@ -199,17 +229,25 @@ public class snmpGetARPList {
                         PrivDES.ID, new OctetString(privPass));
             }
 
-            snmp.getUSM().addUser(user);
+            OctetString secName = new OctetString(username);
+            OctetString engineId = getOrDiscoverEngineId(snmp, address);
+            if (engineId == null) {
+                System.out.println("[SNMP WARN] arpList V3 skipped for address " + address
+                        + " (engine ID discovery failed)");
+                return;
+            }
+            snmp.getUSM().addUser(secName, engineId, user);
 
             // --- Target & TreeUtils ---
             TreeUtils treeUtils = new TreeUtils(snmp, new DefaultPDUFactory());
             UserTarget<Address> userTarget = new UserTarget<>();
             userTarget.setAddress(GenericAddress.parse(address));
             userTarget.setSecurityLevel(SecurityLevel.AUTH_PRIV);
-            userTarget.setSecurityName(new OctetString(username));
+            userTarget.setSecurityName(secName);
             userTarget.setRetries(3);
             userTarget.setTimeout(3000);
             userTarget.setVersion(SnmpConstants.version3);
+            userTarget.setAuthoritativeEngineID(engineId.getValue());
 
             // --- 1) ifIndex -> ifName (IF-MIB::ifName) ---
             Map<Integer, String> ifIndexToName = new HashMap<>();

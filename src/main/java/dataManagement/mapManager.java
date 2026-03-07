@@ -22,6 +22,7 @@ public class mapManager extends Thread {
     private boolean alive = true;
     private nodeMaintainer pinger = null;
     private linkMaintainer snmperLink;
+    private boolean autoDiscoverInterfaces = true;
 
     public mapManager(String id, String name, String description, String owner, String filename) {
         super("mapManagerThread(" + id + ")");
@@ -69,9 +70,13 @@ public class mapManager extends Thread {
             pinger = null;
         }
         if (nodes != null) {
-            pinger = new nodeMaintainer(nodes);
+            pinger = new nodeMaintainer(nodes, autoDiscoverInterfaces);
             pinger.start();
         }
+    }
+
+    public void setAutoDiscoverInterfaces(boolean autoDiscoverInterfaces) {
+        this.autoDiscoverInterfaces = autoDiscoverInterfaces;
     }
 
     public void resetSnmp(){

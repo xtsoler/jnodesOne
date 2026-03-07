@@ -24,10 +24,16 @@ public class nodeMaintainer implements Runnable {
     private Thread me = null;
     private Node[] nodes;
     private snmpGetIfList[] snmplist = null;
+    private final boolean autoDiscoverInterfaces;
 
     public nodeMaintainer(Node[] nodes) {
+        this(nodes, true);
+    }
+
+    public nodeMaintainer(Node[] nodes, boolean autoDiscoverInterfaces) {
         //new instance of ping
         this.nodes = nodes;
+        this.autoDiscoverInterfaces = autoDiscoverInterfaces;
         snmplist = new snmpGetIfList[nodes.length];
     }
 
@@ -69,7 +75,9 @@ public class nodeMaintainer implements Runnable {
             }
 
             //if(cnt>4){
-            updateNodeDetails();
+            if (autoDiscoverInterfaces) {
+                updateNodeDetails();
+            }
             //    cnt=0;
             //}
             //cnt++;

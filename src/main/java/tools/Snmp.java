@@ -8,13 +8,15 @@ import org.snmp4j.PDU;
 import org.snmp4j.ScopedPDU;
 import org.snmp4j.UserTarget;
 import org.snmp4j.CommunityTarget; // NEW: for SNMPv1 community target
+import org.snmp4j.MessageDispatcherImpl;
 import org.snmp4j.event.ResponseEvent;
 import org.snmp4j.mp.MPv3;
+import org.snmp4j.mp.MPv1;
+import org.snmp4j.mp.MPv2c;
 import org.snmp4j.mp.SnmpConstants;
 import org.snmp4j.security.AuthSHA;
 import org.snmp4j.security.PrivAES128;
 import org.snmp4j.security.SecurityLevel;
-import org.snmp4j.security.SecurityModels;
 import org.snmp4j.security.SecurityProtocols;
 import org.snmp4j.security.USM;
 import org.snmp4j.security.UsmUser;
@@ -30,6 +32,7 @@ import org.snmp4j.transport.DefaultUdpTransportMapping;
 import org.snmp4j.TransportMapping;
 import org.snmp4j.security.PrivDES;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.Arrays;
 
 public class Snmp {
 
@@ -37,18 +40,20 @@ public class Snmp {
     private final static boolean debug_timing = false; // leave off; timing is in linkMaintainer
 
     // ----------------------------------------------------------------------
-    // Shared SNMPv3 USM + engine ID cache
+    // Shared protocol registry + engine ID cache
     // ----------------------------------------------------------------------
-    private static final Object USM_LOCK = new Object();
-    private static volatile boolean USM_READY = false;
+    private static final Object PROTOCOLS_LOCK = new Object();
+    private static volatile boolean PROTOCOLS_READY = false;
     private static final ConcurrentHashMap<String, OctetString> ENGINE_ID_BY_ADDRESS = new ConcurrentHashMap<>();
+    // Serialize requests that share the same (securityName, engineId) identity.
+    private static final ConcurrentHashMap<String, Object> USER_SCOPE_LOCKS = new ConcurrentHashMap<>();
 
-    private static void ensureUsmInitialized() {
-        if (USM_READY) {
+    private static void ensureSecurityProtocolsInitialized() {
+        if (PROTOCOLS_READY) {
             return;
         }
-        synchronized (USM_LOCK) {
-            if (USM_READY) {
+        synchronized (PROTOCOLS_LOCK) {
+            if (PROTOCOLS_READY) {
                 return;
             }
 
@@ -56,13 +61,7 @@ public class Snmp {
             SecurityProtocols.getInstance().addAuthenticationProtocol(new AuthSHA());
             SecurityProtocols.getInstance().addPrivacyProtocol(new PrivAES128());
             SecurityProtocols.getInstance().addPrivacyProtocol(new PrivDES());
-
-            // Register a single global USM once
-            USM usm = new USM(SecurityProtocols.getInstance(),
-                    new OctetString(MPv3.createLocalEngineID()), 0);
-            SecurityModels.getInstance().addSecurityModel(usm);
-
-            USM_READY = true;
+            PROTOCOLS_READY = true;
         }
     }
 
@@ -92,6 +91,17 @@ public class Snmp {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    private static String toHex(byte[] bytes) {
+        if (bytes == null) {
+            return "null";
+        }
+        StringBuilder sb = new StringBuilder(bytes.length * 2);
+        for (byte b : bytes) {
+            sb.append(String.format("%02x", b & 0xff));
+        }
+        return sb.toString();
     }
 
     // ----------------------------------------------------------------------
@@ -162,12 +172,19 @@ public class Snmp {
         long t0 = System.nanoTime();
 
         try {
-            // Ensure global USM and protocols are registered once (no per-poll overwrite).
-            ensureUsmInitialized();
+            // Ensure auth/priv protocols exist, then build a local MP/USM stack per poll.
+            // This isolates engine-time state when different devices incorrectly share engineID.
+            ensureSecurityProtocolsInitialized();
 
-            // Transport + listener
+            // Transport + local dispatcher + local USM + listener
             TransportMapping<UdpAddress> transport = new DefaultUdpTransportMapping();
-            snmp = new org.snmp4j.Snmp(transport);
+            MessageDispatcherImpl dispatcher = new MessageDispatcherImpl();
+            dispatcher.addMessageProcessingModel(new MPv1());
+            dispatcher.addMessageProcessingModel(new MPv2c());
+            USM localUsm = new USM(SecurityProtocols.getInstance(),
+                    new OctetString(MPv3.createLocalEngineID()), 0);
+            dispatcher.addMessageProcessingModel(new MPv3(localUsm));
+            snmp = new org.snmp4j.Snmp(dispatcher, transport);
             transport.listen();
 
             // Prepare user (authPriv)
@@ -187,37 +204,52 @@ public class Snmp {
             }
 
             // Discover authoritative engine ID and add user scoped to that engine.
+            // IMPORTANT:
+            // Do not add an unscoped user when discovery fails.
+            // In a multi-map runtime the USM is shared, and unscoped users keyed only by
+            // securityName can be overwritten by another map/node that uses the same username.
+            // That leads to credential mixing across maps.
             OctetString engineId = getOrDiscoverEngineId(snmp, lnk.getNodeSnmpSrc().getIp());
-            if (engineId != null) {
+            if (engineId == null) {
+                System.out.println("[SNMP WARN] link id:" + lnk.getID() + " oid index:" + lnk.getOidIndex()
+                        + " node:" + lnk.getNodeSnmpSrc().getNodeName()
+                        + " cannot discover authoritative engine ID, skipping poll to avoid shared-user conflicts.");
+                return false;
+            }
+            String userScopeKey = secName.toString() + "|" + toHex(engineId.getValue());
+            Object lock = USER_SCOPE_LOCKS.computeIfAbsent(userScopeKey, k -> new Object());
+
+            ResponseEvent<Address> response;
+            synchronized (lock) {
+                // Force-refresh user credentials for this exact (securityName, engineId).
+                // This avoids stale/global USM entries when multiple maps use same username.
+                try {
+                    snmp.getUSM().removeUser(secName, engineId);
+                } catch (Exception ignored) {
+                }
                 snmp.getUSM().addUser(secName, engineId, user);
-            } else {
-                // Fallback (legacy behavior) if discovery fails.
-                snmp.getUSM().addUser(user);
-            }
 
-            // Target
-            UserTarget<Address> userTarget = new UserTarget<>();
-            userTarget.setAddress((Address) GenericAddress.parse(
-                    "udp:" + lnk.getNodeSnmpSrc().getIp() + "/161"));
-            userTarget.setSecurityLevel(SecurityLevel.AUTH_PRIV);
-            userTarget.setSecurityName(secName);
-
-            userTarget.setRetries(1);
-            userTarget.setTimeout(2500);
-            userTarget.setVersion(SnmpConstants.version3);
-            if (engineId != null) {
+                // Target
+                UserTarget<Address> userTarget = new UserTarget<>();
+                userTarget.setAddress((Address) GenericAddress.parse(
+                        "udp:" + lnk.getNodeSnmpSrc().getIp() + "/161"));
+                userTarget.setSecurityLevel(SecurityLevel.AUTH_PRIV);
+                userTarget.setSecurityName(secName);
+                userTarget.setRetries(1);
+                userTarget.setTimeout(2500);
+                userTarget.setVersion(SnmpConstants.version3);
                 userTarget.setAuthoritativeEngineID(engineId.getValue());
-            }
 
-            // PDU
-            ScopedPDU pdu = new ScopedPDU();
-            for (String s : oids) {
-                pdu.add(new VariableBinding(new OID(s)));
-            }
-            pdu.setType(PDU.GET);
+                // PDU
+                ScopedPDU pdu = new ScopedPDU();
+                for (String s : oids) {
+                    pdu.add(new VariableBinding(new OID(s)));
+                }
+                pdu.setType(PDU.GET);
 
-            // Send
-            ResponseEvent<Address> response = snmp.send(pdu, userTarget);
+                // Send while still holding scope lock.
+                response = snmp.send(pdu, userTarget);
+            }
 
             if (debug_timing) {
                 long dtMs = java.util.concurrent.TimeUnit.NANOSECONDS
