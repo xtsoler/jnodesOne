@@ -8,6 +8,12 @@ package jnodes3clientse;
 import java.awt.Container;
 import java.awt.Toolkit;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.JOptionPane;
@@ -36,7 +42,7 @@ public class Main extends javax.swing.JFrame {
         initComponents();
         setIconImage(Toolkit.getDefaultToolkit().getImage(Main.class.getClassLoader().getResource("jnodes.png")));
 
-        dataManagement.storage.addMapFromFile("map.json");
+        dataManagement.storage.addMapFromFile(resolveStartupMapFile());
 
         setSize(600, 350);
         setTitle("JnodesOne version 1.2");
@@ -59,6 +65,46 @@ public class Main extends javax.swing.JFrame {
         contentPane.invalidate();
         contentPane.validate();
         contentPane.repaint();
+    }
+
+    private static String resolveStartupMapFile() {
+        List<String> mapFiles = new ArrayList<>();
+        try {
+            Path cwd = Paths.get(".");
+            try (var stream = Files.list(cwd)) {
+                stream.filter(Files::isRegularFile)
+                        .map(p -> p.getFileName().toString())
+                        .filter(name -> name.toLowerCase().endsWith(".json"))
+                        .forEach(mapFiles::add);
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to scan map files: " + e.getMessage());
+        }
+
+        if (mapFiles.isEmpty()) {
+            return "map.json";
+        }
+        Collections.sort(mapFiles, String.CASE_INSENSITIVE_ORDER);
+        if (mapFiles.size() == 1) {
+            return mapFiles.get(0);
+        }
+
+        String defaultSelection = mapFiles.contains("map.json") ? "map.json" : mapFiles.get(0);
+        Object selected = JOptionPane.showInputDialog(
+                null,
+                "Multiple map files found. Select a map to load:",
+                "Select Map",
+                JOptionPane.QUESTION_MESSAGE,
+                null,
+                mapFiles.toArray(new String[0]),
+                defaultSelection
+        );
+
+        if (selected == null) {
+            System.out.println("Map selection cancelled, loading default: " + defaultSelection);
+            return defaultSelection;
+        }
+        return selected.toString();
     }
 
     /**
