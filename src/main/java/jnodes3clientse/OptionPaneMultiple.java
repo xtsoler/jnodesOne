@@ -6,6 +6,7 @@ package jnodes3clientse;
  */
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Dimension;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import javax.swing.*;
@@ -339,6 +340,13 @@ public class OptionPaneMultiple {
                 options);
 
         JDialog dialog = op.createDialog(parentComponent, "New link ");
+        int minDialogWidth = 560;
+        Dimension currentSize = dialog.getSize();
+        int targetWidth = Math.max(currentSize.width, minDialogWidth);
+        dialog.setMinimumSize(new Dimension(targetWidth, currentSize.height));
+        if (currentSize.width < minDialogWidth) {
+            dialog.setSize(targetWidth, currentSize.height);
+        }
         dialog.setVisible(true);
         Object selectedValue = op.getValue();
         if (selectedValue != null && selectedValue.equals("Ok")) {
